@@ -341,9 +341,10 @@ body {
   align-items: center;
   border-left: 4px solid transparent;
   padding-left: 0.5rem;
+  margin-bottom: 4px;
 }
 .life-row-gap {
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.85rem;
 }
 .life-era-label {
   width: 9rem;
@@ -358,23 +359,26 @@ body {
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(52, 1fr);
-  gap: 3px;
+  gap: 4px;
 }
+/* Every box shares the same box model so filled and empty cells render identically. */
 .life-box {
   width: 100%;
   aspect-ratio: 1 / 1;
-  border-radius: 1px;
+  border-radius: 2px;
+  border: 1px solid var(--stone-200);
 }
 .life-lived {
   background: var(--stone-300);
+  border-color: var(--stone-300);
 }
 .life-current {
   background: var(--pristine);
-  box-shadow: 0 0 0 1px var(--pristine);
+  border-color: var(--pristine);
 }
 .life-future {
   background: #fff;
-  border: 1px solid var(--stone-200);
+  border-color: var(--stone-200);
 }
 
 /* Maturity + features */
