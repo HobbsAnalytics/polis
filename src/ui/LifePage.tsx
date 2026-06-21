@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Milestone, Profile } from '../engine/types.ts';
 import type { LifelineVM } from '../engine/lifeline.ts';
 import { weekSundayISO } from '../engine/lifeline.ts';
@@ -30,6 +30,12 @@ function milestoneWeekIndex(birthDateISO: string, dateISO: string): number {
   return Math.floor((Date.parse(dateISO) - Date.parse(birthDateISO)) / MS_PER_WEEK);
 }
 
+interface Tip {
+  text: string;
+  x: number;
+  y: number;
+}
+
 export function LifePage({
   vm,
   profile,
@@ -42,19 +48,12 @@ export function LifePage({
   const [label, setLabel] = useState('');
   const [dateISO, setDateISO] = useState('');
   const [error, setError] = useState('');
+  const [tip, setTip] = useState<Tip | null>(null);
 
   const eraById = (id: string) => eras.find((e) => e.id === id);
   const currentEra = eraById(vm.currentEraId);
   const pctLeft = Math.round((vm.weeksLeft / vm.totalWeeks) * 100);
 
-  // week index → milestones falling in that week (only those on the chart)
-  const byWeek = new Map<number, Milestone[]>();
-  for (const m of milestones) {
-    const idx = milestoneWeekIndex(profile.birthDateISO, m.dateISO);
-    if (idx >= 0 && idx < vm.totalWeeks) {
-      byWeek.set(idx, [...(byWeek.get(idx) ?? []), m]);
-    }
-  }
   const isOnChart = (m: Milestone) => {
     const idx = milestoneWeekIndex(profile.birthDateISO, m.dateISO);
     return idx >= 0 && idx < vm.totalWeeks;
@@ -69,13 +68,61 @@ export function LifePage({
     setDateISO('');
   }
 
-  function boxTitle(index: number, isBirthday: boolean, year: number): string {
-    let t = `Week of ${formatDate(weekSundayISO(profile.birthDateISO, index))}`;
-    if (isBirthday) t += ` · Birthday (age ${year})`;
-    const ms = byWeek.get(index);
-    if (ms) t += ` · ${ms.map((m) => m.label).join(', ')}`;
-    return t;
-  }
+  // The grid is expensive (~3,900 cells) — memoize so cursor moves (which only
+  // touch tooltip state) don't rebuild it. Each cell carries its info in
+  // data-info; one delegated handler drives the custom tooltip.
+  const grid = useMemo(() => {
+    const byWeek = new Map<number, Milestone[]>();
+    for (const m of milestones) {
+      const idx = milestoneWeekIndex(profile.birthDateISO, m.dateISO);
+      if (idx >= 0 && idx < vm.totalWeeks) {
+        byWeek.set(idx, [...(byWeek.get(idx) ?? []), m]);
+      }
+    }
+    const boxInfo = (index: number, isBirthday: boolean, year: number): string => {
+      let t = `Week of ${formatDate(weekSundayISO(profile.birthDateISO, index))}`;
+      if (isBirthday) t += ` · Birthday (age ${year})`;
+      const ms = byWeek.get(index);
+      if (ms) t += ` · ${ms.map((m) => m.label).join(', ')}`;
+      return t;
+    };
+
+    return (
+      <div
+        className="lifegrid"
+        onMouseMove={(e) => {
+          const el = (e.target as HTMLElement).closest('.life-box');
+          const info = el?.getAttribute('data-info');
+          setTip(info ? { text: info, x: e.clientX, y: e.clientY } : null);
+        }}
+        onMouseLeave={() => setTip(null)}
+      >
+        {vm.years.map((row) => {
+          const era = eraById(row.eraId);
+          const blockGap = row.yearIndex % 5 === 4;
+          return (
+            <div
+              key={row.yearIndex}
+              className={`life-row ${blockGap ? 'life-row-gap' : ''}`}
+              style={{ borderLeftColor: era?.color ?? 'transparent' }}
+            >
+              <div className="life-era-label">{row.eraStart ? era?.name : ''}</div>
+              <div className="life-weeks">
+                {row.weeks.map((c, i) => (
+                  <span
+                    key={c.index}
+                    className={`life-box life-${c.status} ${i === 0 ? 'life-birthday' : ''} ${byWeek.has(c.index) ? 'life-milestone' : ''}`}
+                    data-info={boxInfo(c.index, i === 0, row.yearIndex)}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+    // eraById is a stable closure over `eras`; deps cover the real inputs.
+  }, [vm, milestones, profile, eras]);
 
   return (
     <div>
@@ -174,31 +221,17 @@ export function LifePage({
           ))}
         </div>
 
-        <div className="lifegrid">
-          {vm.years.map((row) => {
-            const era = eraById(row.eraId);
-            const blockGap = row.yearIndex % 5 === 4;
-            return (
-              <div
-                key={row.yearIndex}
-                className={`life-row ${blockGap ? 'life-row-gap' : ''}`}
-                style={{ borderLeftColor: era?.color ?? 'transparent' }}
-              >
-                <div className="life-era-label">{row.eraStart ? era?.name : ''}</div>
-                <div className="life-weeks">
-                  {row.weeks.map((c, i) => (
-                    <span
-                      key={c.index}
-                      className={`life-box life-${c.status} ${i === 0 ? 'life-birthday' : ''} ${byWeek.has(c.index) ? 'life-milestone' : ''}`}
-                      title={boxTitle(c.index, i === 0, row.yearIndex)}
-                    />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        {grid}
       </div>
+
+      {tip && (
+        <div
+          className="week-tip"
+          style={{ left: Math.min(tip.x + 14, window.innerWidth - 240), top: tip.y + 14 }}
+        >
+          {tip.text}
+        </div>
+      )}
     </div>
   );
 }
