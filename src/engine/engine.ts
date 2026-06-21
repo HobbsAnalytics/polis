@@ -1,5 +1,13 @@
-import type { CityState, District, Habit, Landmark, Settings } from './types.ts';
-import { DEFAULT_SETTINGS } from './settings.ts';
+import type {
+  Borough,
+  CityState,
+  District,
+  Habit,
+  Landmark,
+  Settings,
+} from './types.ts';
+import { CITY_VERSION, DEFAULT_SETTINGS, FEATURES } from './settings.ts';
+import { districtHealth, habitsTargeting } from './rollup.ts';
 
 export function clamp01(n: number): number {
   if (n < 0) return 0;
@@ -7,18 +15,26 @@ export function clamp01(n: number): number {
   return n;
 }
 
+/** Whole calendar days from aISO to bISO. Pure (parses fixed date strings). */
+export function dayDiffISO(aISO: string, bISO: string): number {
+  return Math.round((Date.parse(bISO) - Date.parse(aISO)) / 86_400_000);
+}
+
 export interface CreateCityOpts {
   settings?: Settings;
   districts?: District[];
+  boroughs?: Borough[];
   landmarks?: Landmark[];
   habits?: Habit[];
 }
 
 export function createCity(opts: CreateCityOpts = {}): CityState {
   return {
+    version: CITY_VERSION,
     day: 0,
     settings: opts.settings ?? DEFAULT_SETTINGS,
     districts: opts.districts ?? [],
+    boroughs: opts.boroughs ?? [],
     landmarks: opts.landmarks ?? [],
     habits: opts.habits ?? [],
     history: [],
@@ -26,46 +42,30 @@ export function createCity(opts: CreateCityOpts = {}): CityState {
 }
 
 /**
- * Daily evolution of a single 0..1 scalar (district health or landmark condition).
- * delta starts at -entropyPerDay (entropy is the resting state); good habits add,
- * missed good habits subtract (smaller if the user didn't even check in), logged
- * bad habits subtract the most.
+ * Daily evolution of one 0..1 scalar, driven by the habits targeting that node.
+ * Effects scale by habit weight. Entropy is the resting state.
  */
 export function updateScalar(
   current: number,
-  goods: Habit[],
-  bads: Habit[],
+  habits: Habit[],
   completed: Set<string>,
   logged: Set<string>,
   checkedIn: boolean,
   s: Settings,
 ): number {
   let delta = -s.entropyPerDay;
-  for (const g of goods) {
-    if (completed.has(g.id)) {
-      delta += s.goodHabitGain;
-    } else {
-      delta -= checkedIn ? s.missedHabitPenalty : s.missedCheckinPenalty;
-    }
-  }
-  for (const b of bads) {
-    if (logged.has(b.id)) {
-      delta -= s.badHabitPenalty;
+  for (const h of habits) {
+    if (h.kind === 'good') {
+      if (completed.has(h.id)) {
+        delta += s.goodHabitGain * h.weight;
+      } else {
+        delta -= (checkedIn ? s.missedHabitPenalty : s.missedCheckinPenalty) * h.weight;
+      }
+    } else if (logged.has(h.id)) {
+      delta -= s.badHabitPenalty * h.weight;
     }
   }
   return clamp01(current + delta);
-}
-
-function habitsForDistrict(habits: Habit[], districtId: string, kind: Habit['kind']): Habit[] {
-  return habits.filter(
-    (h) => h.kind === kind && h.target.kind === 'district' && h.target.districtId === districtId,
-  );
-}
-
-function habitsForLandmark(habits: Habit[], landmarkId: string, kind: Habit['kind']): Habit[] {
-  return habits.filter(
-    (h) => h.kind === kind && h.target.kind === 'landmark' && h.target.landmarkId === landmarkId,
-  );
 }
 
 function advanceLandmarkTier(lm: Landmark, s: Settings): Landmark {
@@ -83,6 +83,15 @@ function advanceLandmarkTier(lm: Landmark, s: Settings): Landmark {
   return { ...lm, tier, tierProgress };
 }
 
+function unlockFeatures(existing: string[], maturity: number): string[] {
+  const unlocked = new Set(existing);
+  for (const f of FEATURES) {
+    if (maturity >= f.at) unlocked.add(f.id);
+  }
+  // Preserve FEATURES order for stable display.
+  return FEATURES.filter((f) => unlocked.has(f.id)).map((f) => f.id);
+}
+
 interface DayInput {
   completedHabitIds: string[];
   loggedBadHabitIds: string[];
@@ -94,44 +103,40 @@ function advanceDay(state: CityState, input: DayInput): CityState {
   const completed = new Set(input.completedHabitIds);
   const logged = new Set(input.loggedBadHabitIds);
 
-  const districts = state.districts.map((d) => ({
-    ...d,
-    health: updateScalar(
-      d.health,
-      habitsForDistrict(state.habits, d.id, 'good'),
-      habitsForDistrict(state.habits, d.id, 'bad'),
-      completed,
-      logged,
-      input.checkedIn,
-      s,
-    ),
-  }));
+  const upd = (current: number, kind: 'district' | 'borough' | 'landmark', id: string) =>
+    updateScalar(current, habitsTargeting(state.habits, kind, id), completed, logged, input.checkedIn, s);
 
-  const landmarks = state.landmarks.map((lm) => {
-    const condition = updateScalar(
-      lm.condition,
-      habitsForLandmark(state.habits, lm.id, 'good'),
-      habitsForLandmark(state.habits, lm.id, 'bad'),
-      completed,
-      logged,
-      input.checkedIn,
-      s,
-    );
-    return advanceLandmarkTier({ ...lm, condition }, s);
+  const landmarks = state.landmarks.map((lm) =>
+    advanceLandmarkTier({ ...lm, condition: upd(lm.condition, 'landmark', lm.id) }, s),
+  );
+  const boroughs = state.boroughs.map((b) => ({ ...b, healthDirect: upd(b.healthDirect, 'borough', b.id) }));
+  const districtsHD = state.districts.map((d) => ({ ...d, healthDirect: upd(d.healthDirect, 'district', d.id) }));
+
+  // Intermediate state so roll-up sees the updated scalars.
+  const next: CityState = {
+    ...state,
+    day: state.day + 1,
+    landmarks,
+    boroughs,
+    districts: districtsHD,
+    history: [
+      ...state.history,
+      {
+        day: state.day + 1,
+        checkedIn: input.checkedIn,
+        completedHabitIds: [...input.completedHabitIds],
+        loggedBadHabitIds: [...input.loggedBadHabitIds],
+      },
+    ],
+  };
+
+  next.districts = next.districts.map((d) => {
+    const health = districtHealth(next, d);
+    const maturity = health >= s.maturityThreshold ? d.maturity + s.maturityGainPerDay : d.maturity;
+    return { ...d, maturity, features: unlockFeatures(d.features, maturity) };
   });
 
-  const day = state.day + 1;
-  const history = [
-    ...state.history,
-    {
-      day,
-      checkedIn: input.checkedIn,
-      completedHabitIds: [...input.completedHabitIds],
-      loggedBadHabitIds: [...input.loggedBadHabitIds],
-    },
-  ];
-
-  return { ...state, day, districts, landmarks, history };
+  return next;
 }
 
 export function applyCheckIn(
@@ -151,17 +156,50 @@ export function addHabit(state: CityState, habit: Habit): CityState {
 
 export function addLandmark(
   state: CityState,
-  opts: { districtId: string; name: string; condition?: number },
+  opts: { districtId: string; boroughId?: string | null; name: string; condition?: number; attachHabitIds?: string[] },
 ): { state: CityState; landmarkId: string } {
   const landmarkId = `landmark-${state.landmarks.length + 1}`;
   const landmark: Landmark = {
     id: landmarkId,
     districtId: opts.districtId,
+    boroughId: opts.boroughId ?? null,
     name: opts.name,
     condition: opts.condition ?? 0.5,
     tier: 0,
     tierProgress: 0,
     createdDay: state.day,
   };
-  return { state: { ...state, landmarks: [...state.landmarks, landmark] }, landmarkId };
+  const attach = new Set(opts.attachHabitIds ?? []);
+  const habits = state.habits.map((h) =>
+    attach.has(h.id) ? { ...h, target: { kind: 'landmark' as const, id: landmarkId } } : h,
+  );
+  return { state: { ...state, habits, landmarks: [...state.landmarks, landmark] }, landmarkId };
+}
+
+// ---- Removal cooldown (real calendar days; day math passed in from the UI) ----
+
+export function requestHabitRemoval(state: CityState, habitId: string, todayISO: string): CityState {
+  return {
+    ...state,
+    habits: state.habits.map((h) => (h.id === habitId ? { ...h, pendingRemovalSinceISO: todayISO } : h)),
+  };
+}
+
+export function cancelHabitRemoval(state: CityState, habitId: string): CityState {
+  return {
+    ...state,
+    habits: state.habits.map((h) => {
+      if (h.id !== habitId) return h;
+      const { pendingRemovalSinceISO: _drop, ...rest } = h;
+      return rest;
+    }),
+  };
+}
+
+/** Removes the habit only if the cooldown has elapsed; otherwise returns state unchanged. */
+export function confirmHabitRemoval(state: CityState, habitId: string, todayISO: string): CityState {
+  const h = state.habits.find((x) => x.id === habitId);
+  if (!h || h.pendingRemovalSinceISO == null) return state;
+  if (dayDiffISO(h.pendingRemovalSinceISO, todayISO) < state.settings.removalCooldownDays) return state;
+  return { ...state, habits: state.habits.filter((x) => x.id !== habitId) };
 }

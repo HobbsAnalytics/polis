@@ -1,28 +1,58 @@
-import type { CityState, District } from './types.ts';
+import type { Borough, CityState, District, Habit } from './types.ts';
 import { createCity, addLandmark, addHabit } from './engine.ts';
+import { BOROUGHS, DISTRICTS, HABITS, SEED_CREATED_ISO, SEED_LANDMARK } from '../data/catalog.ts';
 
-/**
- * Placeholder content. Districts and habits are intentionally generic — swap them
- * for your finalized framework (virtues / PERMA / etc.) without touching engine code.
- */
+/** Builds the initial CityState from the catalog file. */
 export function createSeededCity(): CityState {
-  const districts: District[] = [
-    { id: 'd1', name: 'District One', description: 'Placeholder wellbeing domain.', health: 0.5 },
-    { id: 'd2', name: 'District Two', description: 'Placeholder wellbeing domain.', health: 0.5 },
-    { id: 'd3', name: 'District Three', description: 'Placeholder wellbeing domain.', health: 0.5 },
-  ];
+  const districts: District[] = DISTRICTS.map((d) => ({
+    id: d.id,
+    name: d.name,
+    description: d.description,
+    healthDirect: 0.5,
+    maturity: 0,
+    features: [],
+  }));
+  const boroughs: Borough[] = BOROUGHS.map((b) => ({
+    id: b.id,
+    districtId: b.districtId,
+    name: b.name,
+    healthDirect: 0.5,
+  }));
+  const habits: Habit[] = HABITS.map((h) => ({
+    id: h.id,
+    name: h.name,
+    kind: h.kind,
+    weight: h.weight,
+    target: h.target,
+    createdAtISO: SEED_CREATED_ISO,
+  }));
 
-  let s = createCity({ districts });
+  let s = createCity({ districts, boroughs, habits });
 
-  // District-level placeholder habits (feed generic sprawl).
-  s = addHabit(s, { id: 'h-d1-good', name: 'Placeholder good habit (D1)', kind: 'good', target: { kind: 'district', districtId: 'd1' } });
-  s = addHabit(s, { id: 'h-d2-good', name: 'Placeholder good habit (D2)', kind: 'good', target: { kind: 'district', districtId: 'd2' } });
-
-  // One placeholder landmark in District One, with its own good + bad habits.
-  const r = addLandmark(s, { districtId: 'd1', name: 'Placeholder Landmark', condition: 0.5 });
+  // Seed landmark with its own good + bad habit.
+  const r = addLandmark(s, {
+    districtId: SEED_LANDMARK.districtId,
+    boroughId: SEED_LANDMARK.boroughId,
+    name: SEED_LANDMARK.name,
+    condition: 0.5,
+  });
   s = r.state;
-  s = addHabit(s, { id: 'h-lm-good', name: 'Placeholder good habit (landmark)', kind: 'good', target: { kind: 'landmark', landmarkId: r.landmarkId } });
-  s = addHabit(s, { id: 'h-lm-bad', name: 'Placeholder bad habit (landmark)', kind: 'bad', target: { kind: 'landmark', landmarkId: r.landmarkId } });
+  s = addHabit(s, {
+    id: SEED_LANDMARK.goodHabit.id,
+    name: SEED_LANDMARK.goodHabit.name,
+    kind: 'good',
+    weight: SEED_LANDMARK.goodHabit.weight,
+    target: { kind: 'landmark', id: r.landmarkId },
+    createdAtISO: SEED_CREATED_ISO,
+  });
+  s = addHabit(s, {
+    id: SEED_LANDMARK.badHabit.id,
+    name: SEED_LANDMARK.badHabit.name,
+    kind: 'bad',
+    weight: SEED_LANDMARK.badHabit.weight,
+    target: { kind: 'landmark', id: r.landmarkId },
+    createdAtISO: SEED_CREATED_ISO,
+  });
 
   return s;
 }

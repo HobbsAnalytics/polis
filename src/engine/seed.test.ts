@@ -1,13 +1,20 @@
 import { it, expect } from '../testkit.ts';
 import { createSeededCity } from './seed.ts';
+import { CITY_VERSION } from './settings.ts';
 
-it('seeded city has placeholder districts, a landmark, and habits', () => {
+it('seeded city matches the catalog: districts, borough, landmark, weighted habits', () => {
   const s = createSeededCity();
+  expect(s.version).toBe(CITY_VERSION);
   expect(s.districts).toHaveLength(3);
+  expect(s.boroughs).toHaveLength(1);
   expect(s.landmarks.length).toBeGreaterThanOrEqual(1);
-  expect(s.habits.length).toBeGreaterThanOrEqual(3);
-  // landmark has at least one habit targeting it
-  const lm = s.landmarks[0];
-  const lmHabits = s.habits.filter((h) => h.target.kind === 'landmark' && h.target.landmarkId === lm.id);
-  expect(lmHabits.length).toBeGreaterThanOrEqual(1);
+
+  // habits exist for each targeting level
+  const kinds = new Set(s.habits.map((h) => h.target.kind));
+  expect(kinds.has('district')).toBe(true);
+  expect(kinds.has('borough')).toBe(true);
+  expect(kinds.has('landmark')).toBe(true);
+
+  // a weight other than 1 came through from the catalog
+  expect(s.habits.some((h) => h.weight === 2)).toBe(true);
 });

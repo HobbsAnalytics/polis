@@ -261,6 +261,53 @@ body {
   height: 1px;
 }
 
+/* Maturity + features */
+.maturity {
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--stone-400);
+  letter-spacing: 0.03em;
+}
+.features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+.feature {
+  font-size: 0.75rem;
+  background: var(--stone-100);
+  border: 1px solid var(--stone-200);
+  border-radius: 9999px;
+  padding: 0.1rem 0.5rem;
+  color: var(--stone-700);
+}
+
+/* Borough sub-block */
+.borough {
+  border-left: 3px solid var(--stone-200);
+  padding: 0.4rem 0 0.4rem 0.6rem;
+  margin-top: 0.5rem;
+}
+
+/* Habit catalog list */
+.habit-list {
+  display: flex;
+  flex-direction: column;
+}
+.habit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--stone-200);
+}
+.removal {
+  max-width: 30rem;
+}
+
 /* Temporary dev panel */
 .dev-panel {
   border: 1px dashed var(--stone-400);

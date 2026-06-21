@@ -16,10 +16,15 @@ it('loadCity returns null when nothing stored', () => {
   expect(loadCity()).toBeNull();
 });
 
+it('loadCity returns null for a stale version (migration)', () => {
+  const s = createSeededCity();
+  saveCity({ ...s, version: 999 });
+  expect(loadCity()).toBeNull();
+});
+
 it('export then import round-trips deep-equal', () => {
   const s = createSeededCity();
-  const json = exportCity(s);
-  expect(importCity(json)).toEqual(s);
+  expect(importCity(exportCity(s))).toEqual(s);
 });
 
 it('importCity throws on invalid input', () => {

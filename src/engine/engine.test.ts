@@ -1,13 +1,38 @@
 import { it, expect } from '../testkit.ts';
-import { createCity, applyCheckIn, applyMissedDay, addLandmark, addHabit } from './engine.ts';
-import type { District } from './types.ts';
+import {
+  createCity,
+  applyCheckIn,
+  applyMissedDay,
+  addLandmark,
+  addHabit,
+  requestHabitRemoval,
+  cancelHabitRemoval,
+  confirmHabitRemoval,
+} from './engine.ts';
+import { districtHealth } from './rollup.ts';
+import type { District, Habit, TargetRef } from './types.ts';
 
-const d: District = { id: 'd1', name: 'D', description: '', health: 0.5 };
+const dist = (id: string, healthDirect = 0.5): District => ({
+  id,
+  name: id,
+  description: '',
+  healthDirect,
+  maturity: 0,
+  features: [],
+});
+const hab = (id: string, kind: Habit['kind'], target: TargetRef, weight = 1): Habit => ({
+  id,
+  name: id,
+  kind,
+  weight,
+  target,
+  createdAtISO: '2026-01-01',
+});
 
 it('good habit raises landmark condition; missing it lowers slightly', () => {
-  let s = createCity({ districts: [d] });
+  let s = createCity({ districts: [dist('d1')] });
   const r = addLandmark(s, { districtId: 'd1', name: 'L' });
-  s = addHabit(r.state, { id: 'h1', name: 'do', kind: 'good', target: { kind: 'landmark', landmarkId: r.landmarkId } });
+  s = addHabit(r.state, hab('h1', 'good', { kind: 'landmark', id: r.landmarkId }));
   const before = s.landmarks[0].condition;
   const up = applyCheckIn(s, { completedHabitIds: ['h1'], loggedBadHabitIds: [] });
   expect(up.landmarks[0].condition).toBeGreaterThan(before);
@@ -15,12 +40,22 @@ it('good habit raises landmark condition; missing it lowers slightly', () => {
   expect(down.landmarks[0].condition).toBeLessThan(before);
 });
 
+it('habit weight scales its effect', () => {
+  let s = createCity({ districts: [dist('d1', 0.5), dist('d2', 0.5)] });
+  s = addHabit(s, hab('h1', 'good', { kind: 'district', id: 'd1' }, 1));
+  s = addHabit(s, hab('h2', 'good', { kind: 'district', id: 'd2' }, 3));
+  const up = applyCheckIn(s, { completedHabitIds: ['h1', 'h2'], loggedBadHabitIds: [] });
+  const gain1 = up.districts[0].healthDirect - 0.5;
+  const gain2 = up.districts[1].healthDirect - 0.5;
+  expect(gain2).toBeGreaterThan(gain1);
+});
+
 it('neglect gradient: bad habit > missed habit > missed checkin', () => {
-  let s = createCity({ districts: [d] });
+  let s = createCity({ districts: [dist('d1')] });
   const r = addLandmark(s, { districtId: 'd1', name: 'L' });
   s = r.state;
-  s = addHabit(s, { id: 'g', name: 'g', kind: 'good', target: { kind: 'landmark', landmarkId: r.landmarkId } });
-  s = addHabit(s, { id: 'b', name: 'b', kind: 'bad', target: { kind: 'landmark', landmarkId: r.landmarkId } });
+  s = addHabit(s, hab('g', 'good', { kind: 'landmark', id: r.landmarkId }));
+  s = addHabit(s, hab('b', 'bad', { kind: 'landmark', id: r.landmarkId }));
   const start = 0.8;
   s.landmarks[0].condition = start;
   const badHit = start - applyCheckIn(s, { completedHabitIds: ['g'], loggedBadHabitIds: ['b'] }).landmarks[0].condition;
@@ -31,10 +66,9 @@ it('neglect gradient: bad habit > missed habit > missed checkin', () => {
 });
 
 it('one missed day is small, three weeks is large (weeks not days)', () => {
-  let s = createCity({ districts: [d] });
+  let s = createCity({ districts: [dist('d1')] });
   const r = addLandmark(s, { districtId: 'd1', name: 'L' });
-  s = r.state;
-  s = addHabit(s, { id: 'g', name: 'g', kind: 'good', target: { kind: 'landmark', landmarkId: r.landmarkId } });
+  s = addHabit(r.state, hab('g', 'good', { kind: 'landmark', id: r.landmarkId }));
   s.landmarks[0].condition = 1;
   const oneDay = 1 - applyMissedDay(s).landmarks[0].condition;
   let t = s;
@@ -44,7 +78,7 @@ it('one missed day is small, three weeks is large (weeks not days)', () => {
 });
 
 it('condition clamps to [0,1] and state is not mutated', () => {
-  let s = createCity({ districts: [d] });
+  let s = createCity({ districts: [dist('d1')] });
   const r = addLandmark(s, { districtId: 'd1', name: 'L' });
   s = r.state;
   s.landmarks[0].condition = 0.01;
@@ -55,20 +89,56 @@ it('condition clamps to [0,1] and state is not mutated', () => {
   expect(t.day).toBe(s.day + 10);
 });
 
-it('sustained high condition raises tier (sticky)', () => {
-  let s = createCity({ districts: [d] });
+it('sustained high condition raises landmark tier (sticky)', () => {
+  let s = createCity({ districts: [dist('d1')] });
   const r = addLandmark(s, { districtId: 'd1', name: 'L' });
-  s = r.state;
-  s = addHabit(s, { id: 'g', name: 'g', kind: 'good', target: { kind: 'landmark', landmarkId: r.landmarkId } });
+  s = addHabit(r.state, hab('g', 'good', { kind: 'landmark', id: r.landmarkId }));
   s.landmarks[0].condition = 1;
   let t = s;
   for (let i = 0; i < 14; i++) t = applyCheckIn(t, { completedHabitIds: ['g'], loggedBadHabitIds: [] });
   expect(t.landmarks[0].tier).toBeGreaterThanOrEqual(1);
 });
 
-it('district-targeted habits drive district health', () => {
-  let s = createCity({ districts: [{ ...d, health: 0.5 }] });
-  s = addHabit(s, { id: 'dh', name: 'walk', kind: 'good', target: { kind: 'district', districtId: 'd1' } });
-  const up = applyCheckIn(s, { completedHabitIds: ['dh'], loggedBadHabitIds: [] });
-  expect(up.districts[0].health).toBeGreaterThan(0.5);
+it('a thriving landmark rolls up to lift district health', () => {
+  let s = createCity({ districts: [dist('d1', 0.5)] });
+  const r = addLandmark(s, { districtId: 'd1', name: 'L', condition: 0.95 });
+  s = addHabit(r.state, hab('g', 'good', { kind: 'landmark', id: r.landmarkId }));
+  // No district-direct habits, so the only contributor is the landmark.
+  expect(districtHealth(s, s.districts[0])).toBeGreaterThan(0.9);
+});
+
+it('roll-up is weighted: a bigger contributor dominates', () => {
+  let s = createCity({ districts: [dist('d1', 0.2)] });
+  // Two heavy district-direct habits keep direct weight high vs a single-habit landmark.
+  s = addHabit(s, hab('da', 'good', { kind: 'district', id: 'd1' }));
+  s = addHabit(s, hab('db', 'good', { kind: 'district', id: 'd1' }));
+  const r = addLandmark(s, { districtId: 'd1', name: 'L', condition: 1 });
+  s = addHabit(r.state, hab('lg', 'good', { kind: 'landmark', id: r.landmarkId }));
+  const h = districtHealth(s, s.districts[0]);
+  // weighted avg of (0.2 * 2) and (1 * 1) = 1.4/3 ≈ 0.467 — pulled toward the heavier direct side
+  expect(h).toBeGreaterThan(0.2);
+  expect(h).toBeLessThan(0.6);
+});
+
+it('maturity accrues at pristine and unlocks features', () => {
+  let s = createCity({ districts: [dist('d1', 1)] });
+  s = addHabit(s, hab('g', 'good', { kind: 'district', id: 'd1' }));
+  let t = s;
+  for (let i = 0; i < 10; i++) t = applyCheckIn(t, { completedHabitIds: ['g'], loggedBadHabitIds: [] });
+  expect(t.districts[0].maturity).toBeGreaterThan(0);
+  expect(t.districts[0].features).toContain('fountain');
+  expect(t.districts[0].features.includes('gardens')).toBe(false);
+});
+
+it('removal cooldown: request, blocked confirm, cancel, allowed confirm', () => {
+  let s = createCity({ districts: [dist('d1')] });
+  s = addHabit(s, hab('g', 'good', { kind: 'district', id: 'd1' }));
+  s = requestHabitRemoval(s, 'g', '2026-06-20');
+  expect(s.habits[0].pendingRemovalSinceISO).toBe('2026-06-20');
+  // 1 day later → still blocked
+  expect(confirmHabitRemoval(s, 'g', '2026-06-21').habits).toHaveLength(1);
+  // cancel clears the flag
+  expect(cancelHabitRemoval(s, 'g').habits[0].pendingRemovalSinceISO).toBe(undefined);
+  // 2 days later → removed
+  expect(confirmHabitRemoval(s, 'g', '2026-06-22').habits).toHaveLength(0);
 });

@@ -1,12 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CityState } from '../engine/types.ts';
-import { addHabit, addLandmark, applyCheckIn, applyMissedDay } from '../engine/engine.ts';
+import {
+  addHabit,
+  addLandmark,
+  applyCheckIn,
+  applyMissedDay,
+  requestHabitRemoval,
+  cancelHabitRemoval,
+  confirmHabitRemoval,
+} from '../engine/engine.ts';
 import { buildCityViewModel } from '../engine/viewModel.ts';
 import { createSeededCity } from '../engine/seed.ts';
 import { saveCity, loadCity, exportCity, importCity, catchUpMissedDays } from '../persistence/storage.ts';
 import { CityView } from './CityView.tsx';
 import { CheckIn } from './CheckIn.tsx';
 import { NewLandmark } from './NewLandmark.tsx';
+import { HabitCatalog } from './HabitCatalog.tsx';
+import type { NewHabitFields } from './HabitCatalog.tsx';
 import { DevPanel } from './DevPanel.tsx';
 import type { AdvanceMode } from './DevPanel.tsx';
 
@@ -28,7 +38,6 @@ export function App() {
   const [lastCheckIn, setLastCheckIn] = useState<string | null>(null);
   const initialized = useRef(false);
 
-  // One-time init: load (or seed), then apply missed days since last resolved date.
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
@@ -66,22 +75,38 @@ export function App() {
     update(next);
   }
 
+  function handleCreateHabit(fields: NewHabitFields) {
+    if (!city) return;
+    update(
+      addHabit(city, {
+        id: crypto.randomUUID(),
+        name: fields.name,
+        kind: fields.kind,
+        weight: fields.weight,
+        target: fields.target,
+        createdAtISO: todayStr(),
+      }),
+    );
+  }
+
   function handleCreateLandmark(
     districtId: string,
+    boroughId: string | null,
     name: string,
-    goodHabitNames: string[],
-    badHabitNames: string[],
+    attachHabitIds: string[],
   ) {
     if (!city) return;
-    const r = addLandmark(city, { districtId, name });
-    let s = r.state;
-    for (const n of goodHabitNames) {
-      s = addHabit(s, { id: crypto.randomUUID(), name: n, kind: 'good', target: { kind: 'landmark', landmarkId: r.landmarkId } });
-    }
-    for (const n of badHabitNames) {
-      s = addHabit(s, { id: crypto.randomUUID(), name: n, kind: 'bad', target: { kind: 'landmark', landmarkId: r.landmarkId } });
-    }
-    update(s);
+    update(addLandmark(city, { districtId, boroughId, name, attachHabitIds }).state);
+  }
+
+  function handleRequestRemoval(id: string) {
+    if (city) update(requestHabitRemoval(city, id, todayStr()));
+  }
+  function handleCancelRemoval(id: string) {
+    if (city) update(cancelHabitRemoval(city, id));
+  }
+  function handleConfirmRemoval(id: string) {
+    if (city) update(confirmHabitRemoval(city, id, todayStr()));
   }
 
   // --- TEMPORARY: time-travel debug controls (remove before final release) ---
@@ -97,7 +122,6 @@ export function App() {
     }
     update(s);
   }
-
   function handleReset() {
     const s = createSeededCity();
     localStorage.removeItem(LAST_CHECKIN);
@@ -120,8 +144,7 @@ export function App() {
 
   async function handleImport(file: File) {
     try {
-      const text = await file.text();
-      update(importCity(text));
+      update(importCity(await file.text()));
     } catch {
       alert('That file is not a valid Polis city.');
     }
@@ -164,8 +187,22 @@ export function App() {
       <CheckIn habits={city.habits} canCheckIn={canCheckIn} onComplete={handleCheckIn} />
       <CityView vm={vm} />
       <div style={{ height: '1.5rem' }} />
+      <HabitCatalog
+        habits={city.habits}
+        districts={city.districts}
+        boroughs={city.boroughs}
+        landmarks={city.landmarks}
+        today={todayStr()}
+        cooldownDays={city.settings.removalCooldownDays}
+        onCreateHabit={handleCreateHabit}
+        onRequestRemoval={handleRequestRemoval}
+        onCancelRemoval={handleCancelRemoval}
+        onConfirmRemoval={handleConfirmRemoval}
+      />
       <NewLandmark
         districts={city.districts.map((d) => ({ id: d.id, name: d.name }))}
+        boroughs={city.boroughs}
+        habits={city.habits}
         onCreate={handleCreateLandmark}
       />
       <DevPanel onAdvance={handleAdvance} onReset={handleReset} />

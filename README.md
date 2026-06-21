@@ -7,19 +7,28 @@ Tend your habits and the city grows, sprawls, and gleams. Neglect or sabotage
 yourself and districts fade, crumble, or burn. See `docs/superpowers/specs/` for
 the full design.
 
-## Status: Phase 1 (engine + "spreadsheet city")
+## Status: Phase 1 + v2 (engine + "spreadsheet city")
 
-- **Engine** (`src/engine/`) — a pure-TypeScript simulation: districts, generic +
-  landmark buildings, good/bad habits, condition/health scalars with rolling
-  momentum + entropy + sticky tiers, and a daily check-in. No UI/DOM/render deps.
+- **Engine** (`src/engine/`) — a pure-TypeScript simulation. Three-level hierarchy:
+  **District → Borough (optional) → Landmark**, with binary good/bad **habits**
+  (each weighted) targeting any level. Per-node health/condition scalars evolve by
+  momentum + entropy + sticky landmark tiers. Lower levels **roll up** into the
+  district's health, weighted by how many habits/landmarks sit under each
+  contributor. Districts accrue unbounded **maturity** while healthy, which adds
+  legacy buildings (no cap) and unlocks organic **features** (fountain → park →
+  library → …). Habit removal has a **two-day cooldown**. No UI/DOM/render deps.
+- **Catalog** (`src/data/catalog.ts`) — the human-editable source of the default
+  districts, boroughs, and habits (name, kind, weight, target).
 - **View model** (`src/engine/viewModel.ts`) — the renderer seam. The UI consumes
   only this serializable read-only model, so a future PixiJS renderer (Stage 2/3)
   can replace the React cards without touching the engine.
 - **Persistence** (`src/persistence/`) — localStorage + JSON export/import +
-  elapsed-day catch-up.
-- **UI** (`src/ui/`) — React "spreadsheet city": districts as cards, generic
-  buildings as colored chips, landmarks with condition bars, a daily check-in, and
-  a landmark-creation form.
+  elapsed-day catch-up. A `version` field re-seeds on incompatible saves.
+- **UI** (`src/ui/`) — React "spreadsheet city": district cards (health, maturity,
+  feature badges, uncapped neighborhood chips, borough sub-blocks, landmarks), a
+  daily check-in, a **habit catalog** (create/attach/remove with cooldown), and a
+  landmark builder that attaches habits from the catalog. A temporary
+  `DevPanel` time-travels days for tuning (clearly marked; remove before release).
 
 ## Commands
 

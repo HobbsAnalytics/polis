@@ -1,5 +1,6 @@
 import type { CityState } from '../engine/types.ts';
 import { applyMissedDay } from '../engine/engine.ts';
+import { CITY_VERSION } from '../engine/settings.ts';
 
 const STORAGE_KEY = 'polis.city';
 
@@ -7,11 +8,13 @@ export function saveCity(state: CityState): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+/** Returns the saved city, or null if absent / unparseable / a stale version. */
 export function loadCity(): CityState | null {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw == null) return null;
   try {
-    return parseCity(raw);
+    const city = parseCity(raw);
+    return city.version === CITY_VERSION ? city : null;
   } catch {
     return null;
   }
@@ -44,10 +47,12 @@ function isCityState(obj: unknown): obj is CityState {
   if (typeof obj !== 'object' || obj === null) return false;
   const c = obj as Record<string, unknown>;
   return (
+    typeof c.version === 'number' &&
     typeof c.day === 'number' &&
     typeof c.settings === 'object' &&
     c.settings !== null &&
     Array.isArray(c.districts) &&
+    Array.isArray(c.boroughs) &&
     Array.isArray(c.landmarks) &&
     Array.isArray(c.habits) &&
     Array.isArray(c.history)

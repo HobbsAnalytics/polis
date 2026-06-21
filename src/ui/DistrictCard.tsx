@@ -1,19 +1,52 @@
-import type { DistrictVM } from '../engine/types.ts';
-import { conditionLabel } from '../engine/viewModel.ts';
+import type { BoroughVM, DistrictVM, LandmarkVM } from '../engine/types.ts';
 import { labelSlug } from './labels.ts';
 
 function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
 }
 
+function LandmarkRow({ lm }: { lm: LandmarkVM }) {
+  const slug = labelSlug(lm.label);
+  return (
+    <div className="landmark">
+      <div className="landmark-head">
+        <span className="landmark-name">
+          {lm.name} <span className="tier">tier {lm.tier}</span>
+        </span>
+        <span className={`badge tcond-${slug}`}>{lm.label}</span>
+      </div>
+      <div className="bar bar-lg">
+        <div className={`bar-fill cond-${slug}`} style={{ width: pct(lm.condition) }} />
+      </div>
+    </div>
+  );
+}
+
+function BoroughBlock({ borough }: { borough: BoroughVM }) {
+  const slug = labelSlug(borough.label);
+  return (
+    <div className="borough">
+      <div className="landmark-head">
+        <span className="landmark-name">⌂ {borough.name}</span>
+        <span className={`badge tcond-${slug}`}>{borough.label}</span>
+      </div>
+      <div className="bar bar-lg">
+        <div className={`bar-fill cond-${slug}`} style={{ width: pct(borough.health) }} />
+      </div>
+      {borough.landmarks.map((lm) => (
+        <LandmarkRow key={lm.id} lm={lm} />
+      ))}
+    </div>
+  );
+}
+
 export function DistrictCard({ district }: { district: DistrictVM }) {
-  const healthLabel = conditionLabel(district.health);
-  const slug = labelSlug(healthLabel);
+  const slug = labelSlug(district.label);
   return (
     <div className="panel" style={{ marginBottom: 0 }}>
       <div className="district-head">
         <h3 className="district-name">{district.name}</h3>
-        <span className={`badge tcond-${slug}`}>{healthLabel}</span>
+        <span className={`badge tcond-${slug}`}>{district.label}</span>
       </div>
       <p className="muted">{district.description}</p>
 
@@ -21,10 +54,24 @@ export function DistrictCard({ district }: { district: DistrictVM }) {
         <div className={`bar-fill cond-${slug}`} style={{ width: pct(district.health) }} />
       </div>
 
+      {district.maturity > 0 && (
+        <div className="maturity">maturity {district.maturity.toFixed(1)}</div>
+      )}
+
+      {district.features.length > 0 && (
+        <div className="features">
+          {district.features.map((f) => (
+            <span key={f.id} className="feature" title={f.name}>
+              {f.emoji} {f.name}
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className="section-label">Neighborhood ({district.generic.length} buildings)</div>
       <div className="chips">
         {district.generic.length === 0 ? (
-          <span className="abandoned">abandoned</span>
+          <span className="abandoned">empty lot</span>
         ) : (
           district.generic.map((b, i) => (
             <span key={i} className={`chip cond-${labelSlug(b.label)}`} title={b.label} />
@@ -32,25 +79,21 @@ export function DistrictCard({ district }: { district: DistrictVM }) {
         )}
       </div>
 
+      {district.boroughs.length > 0 && (
+        <>
+          <div className="section-label">Boroughs</div>
+          {district.boroughs.map((b) => (
+            <BoroughBlock key={b.id} borough={b} />
+          ))}
+        </>
+      )}
+
       {district.landmarks.length > 0 && (
         <>
           <div className="section-label">Landmarks</div>
-          {district.landmarks.map((lm) => {
-            const lmSlug = labelSlug(lm.label);
-            return (
-              <div key={lm.id} className="landmark">
-                <div className="landmark-head">
-                  <span className="landmark-name">
-                    {lm.name} <span className="tier">tier {lm.tier}</span>
-                  </span>
-                  <span className={`badge tcond-${lmSlug}`}>{lm.label}</span>
-                </div>
-                <div className="bar bar-lg">
-                  <div className={`bar-fill cond-${lmSlug}`} style={{ width: pct(lm.condition) }} />
-                </div>
-              </div>
-            );
-          })}
+          {district.landmarks.map((lm) => (
+            <LandmarkRow key={lm.id} lm={lm} />
+          ))}
         </>
       )}
     </div>

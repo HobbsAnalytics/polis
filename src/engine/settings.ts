@@ -1,11 +1,12 @@
 import type { Settings } from './types.ts';
 
+export const CITY_VERSION = 2;
+
 /**
- * Defaults tuned so that one missed day is noise and ~3 neglected weeks clearly
- * shows. Neglect gradient: missedCheckinPenalty < missedHabitPenalty < badHabitPenalty.
+ * Defaults tuned so one missed day is noise and ~3 neglected weeks clearly shows.
+ * Neglect gradient: missedCheckinPenalty < missedHabitPenalty < badHabitPenalty.
  */
 export const DEFAULT_SETTINGS: Settings = {
-  windowDays: 14,
   entropyPerDay: 0.01,
   goodHabitGain: 0.06,
   missedHabitPenalty: 0.03,
@@ -13,5 +14,25 @@ export const DEFAULT_SETTINGS: Settings = {
   badHabitPenalty: 0.12,
   tierUpThreshold: 0.85,
   daysToTier: 14,
-  maxGenericBuildings: 12,
+  baseSpread: 12,
+  maturityThreshold: 0.8,
+  maturityGainPerDay: 0.2,
+  removalCooldownDays: 2,
 };
+
+/** Named organic features unlocked at district maturity milestones (sticky). */
+export interface FeatureDef {
+  id: string;
+  at: number;
+  name: string;
+  emoji: string;
+}
+
+export const FEATURES: FeatureDef[] = [
+  { id: 'fountain', at: 1, name: 'Fountain', emoji: '⛲' },
+  { id: 'park', at: 3, name: 'Park', emoji: '🌳' },
+  { id: 'library', at: 6, name: 'Library', emoji: '📚' },
+  { id: 'market', at: 10, name: 'Market', emoji: '🏪' },
+  { id: 'gardens', at: 15, name: 'Gardens', emoji: '🌸' },
+  { id: 'cathedral', at: 22, name: 'Grand Hall', emoji: '🏛️' },
+];

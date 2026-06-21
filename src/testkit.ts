@@ -77,6 +77,10 @@ class Expectation {
   toHaveLength(n: number) {
     assert.strictEqual((this.actual as { length: number }).length, n);
   }
+  toContain(item: unknown) {
+    const a = this.actual as unknown[] | string;
+    assert.ok(a.includes(item as never), `expected ${JSON.stringify(a)} to contain ${JSON.stringify(item)}`);
+  }
   toThrow() {
     assert.throws(this.actual as Fn);
   }

@@ -1,31 +1,49 @@
-// Core data model for the Polis simulation engine.
+// Core data model for the Polis simulation engine (v2).
 // This module has ZERO UI/render/DOM dependencies.
 
 export type HabitKind = 'good' | 'bad';
+export type NodeKind = 'district' | 'borough' | 'landmark';
 
-export type TargetRef =
-  | { kind: 'district'; districtId: string }
-  | { kind: 'landmark'; landmarkId: string };
+/** Where a habit attaches. `id` references a district, borough, or landmark. */
+export interface TargetRef {
+  kind: NodeKind;
+  id: string;
+}
 
 export interface Habit {
   id: string;
   name: string;
   kind: HabitKind;
+  weight: number;
   target: TargetRef;
+  createdAtISO: string;
+  /** Set (to an ISO date) when the user requests removal; cooldown gates deletion. */
+  pendingRemovalSinceISO?: string;
 }
 
-/** A wellbeing domain — a neighborhood. `health` is 0..1. */
+/** A wellbeing domain — a neighborhood. */
 export interface District {
   id: string;
   name: string;
   description: string;
-  health: number;
+  healthDirect: number; // 0..1, from habits targeting the district directly
+  maturity: number; // >=0, unbounded, sticky
+  features: string[]; // unlocked feature ids, sticky
 }
 
-/** A specific, committed goal. `condition` is 0..1; `tier` is sticky and never decreases. */
+/** Optional sub-category within a district. */
+export interface Borough {
+  id: string;
+  districtId: string;
+  name: string;
+  healthDirect: number; // 0..1, from habits targeting the borough directly
+}
+
+/** A specific, committed goal. `tier` is sticky and never decreases. */
 export interface Landmark {
   id: string;
   districtId: string;
+  boroughId: string | null;
   name: string;
   condition: number;
   tier: number;
@@ -33,7 +51,6 @@ export interface Landmark {
   createdDay: number;
 }
 
-/** One day's log. For a missed day, checkedIn is false and the id arrays are empty. */
 export interface DayRecord {
   day: number;
   checkedIn: boolean;
@@ -41,9 +58,7 @@ export interface DayRecord {
   loggedBadHabitIds: string[];
 }
 
-/** Tunable simulation constants. "Weeks not days": small per-day movement. */
 export interface Settings {
-  windowDays: number;
   entropyPerDay: number;
   goodHabitGain: number;
   missedHabitPenalty: number;
@@ -51,13 +66,18 @@ export interface Settings {
   badHabitPenalty: number;
   tierUpThreshold: number;
   daysToTier: number;
-  maxGenericBuildings: number;
+  baseSpread: number; // live-building scaling factor
+  maturityThreshold: number; // district health at/above which maturity accrues
+  maturityGainPerDay: number;
+  removalCooldownDays: number;
 }
 
 export interface CityState {
+  version: number;
   day: number;
   settings: Settings;
   districts: District[];
+  boroughs: Borough[];
   landmarks: Landmark[];
   habits: Habit[];
   history: DayRecord[];
@@ -72,6 +92,12 @@ export interface GenericBuildingVM {
   label: ConditionLabel;
 }
 
+export interface FeatureVM {
+  id: string;
+  name: string;
+  emoji: string;
+}
+
 export interface LandmarkVM {
   id: string;
   name: string;
@@ -80,13 +106,25 @@ export interface LandmarkVM {
   tier: number;
 }
 
+export interface BoroughVM {
+  id: string;
+  name: string;
+  health: number;
+  label: ConditionLabel;
+  landmarks: LandmarkVM[];
+}
+
 export interface DistrictVM {
   id: string;
   name: string;
   description: string;
   health: number;
+  label: ConditionLabel;
+  maturity: number;
   generic: GenericBuildingVM[];
-  landmarks: LandmarkVM[];
+  features: FeatureVM[];
+  boroughs: BoroughVM[];
+  landmarks: LandmarkVM[]; // directly attached (no borough)
 }
 
 export interface CityViewModel {
