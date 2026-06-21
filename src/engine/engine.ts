@@ -4,6 +4,7 @@ import type {
   District,
   Habit,
   Landmark,
+  Milestone,
   Profile,
   Settings,
 } from './types.ts';
@@ -24,6 +25,7 @@ export function dayDiffISO(aISO: string, bISO: string): number {
 export interface CreateCityOpts {
   settings?: Settings;
   profile?: Profile;
+  milestones?: Milestone[];
   districts?: District[];
   boroughs?: Borough[];
   landmarks?: Landmark[];
@@ -36,6 +38,7 @@ export function createCity(opts: CreateCityOpts = {}): CityState {
     day: 0,
     settings: opts.settings ?? DEFAULT_SETTINGS,
     profile: opts.profile ?? DEFAULT_PROFILE,
+    milestones: opts.milestones ?? [],
     districts: opts.districts ?? [],
     boroughs: opts.boroughs ?? [],
     landmarks: opts.landmarks ?? [],
@@ -159,6 +162,14 @@ export function addHabit(state: CityState, habit: Habit): CityState {
 
 export function setProfile(state: CityState, profile: Profile): CityState {
   return { ...state, profile };
+}
+
+export function addMilestone(state: CityState, milestone: Milestone): CityState {
+  return { ...state, milestones: [...state.milestones, milestone] };
+}
+
+export function removeMilestone(state: CityState, id: string): CityState {
+  return { ...state, milestones: state.milestones.filter((m) => m.id !== id) };
 }
 
 export function addLandmark(

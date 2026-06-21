@@ -77,11 +77,19 @@ export interface Profile {
   lifespanYears: number;
 }
 
+/** A user-defined important life date, highlighted on the Life-in-Weeks grid. */
+export interface Milestone {
+  id: string;
+  label: string;
+  dateISO: string;
+}
+
 export interface CityState {
   version: number;
   day: number;
   settings: Settings;
   profile: Profile;
+  milestones: Milestone[];
   districts: District[];
   boroughs: Borough[];
   landmarks: Landmark[];

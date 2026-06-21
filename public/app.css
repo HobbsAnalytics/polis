@@ -386,6 +386,22 @@ body {
   z-index: 1;
   box-shadow: 0 0 0 2px #b45309;
 }
+/* A week containing a user milestone. */
+.life-milestone {
+  background: #7c3aed;
+  border-color: #7c3aed;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 0 0 2px #7c3aed;
+}
+.milestone-dot {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
+  background: #7c3aed;
+  vertical-align: -1px;
+}
 
 /* Maturity + features */
 .maturity {

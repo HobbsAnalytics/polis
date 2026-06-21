@@ -15,6 +15,14 @@ export function ageYears(weeks: number): number {
   return Math.floor(weeks / WEEKS_PER_YEAR);
 }
 
+/** The Sunday (YYYY-MM-DD, UTC) falling within the birthday-anchored week `index`. */
+export function weekSundayISO(birthDateISO: string, index: number): string {
+  const start = Date.parse(birthDateISO) + index * MS_PER_WEEK;
+  const dow = new Date(start).getUTCDay(); // 0 = Sunday
+  const sunday = start + ((7 - dow) % 7) * 86_400_000;
+  return new Date(sunday).toISOString().slice(0, 10);
+}
+
 /** Era whose age range covers `age`; clamps to the last era beyond lifespan. */
 export function currentEra(age: number, eras: EraDef[]): EraDef {
   const match = eras.find((e) => age >= e.startAge && age <= e.endAge);

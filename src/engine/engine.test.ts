@@ -8,6 +8,8 @@ import {
   requestHabitRemoval,
   cancelHabitRemoval,
   confirmHabitRemoval,
+  addMilestone,
+  removeMilestone,
 } from './engine.ts';
 import { districtHealth } from './rollup.ts';
 import type { District, Habit, TargetRef } from './types.ts';
@@ -128,6 +130,16 @@ it('maturity accrues at pristine and unlocks features', () => {
   expect(t.districts[0].maturity).toBeGreaterThan(0);
   expect(t.districts[0].features).toContain('fountain');
   expect(t.districts[0].features.includes('gardens')).toBe(false);
+});
+
+it('add and remove milestones', () => {
+  let s = createCity({ districts: [dist('d1')] });
+  s = addMilestone(s, { id: 'm1', label: 'Wedding', dateISO: '2014-06-14' });
+  s = addMilestone(s, { id: 'm2', label: 'Moved', dateISO: '2019-03-01' });
+  expect(s.milestones).toHaveLength(2);
+  s = removeMilestone(s, 'm1');
+  expect(s.milestones).toHaveLength(1);
+  expect(s.milestones[0].label).toBe('Moved');
 });
 
 it('removal cooldown: request, blocked confirm, cancel, allowed confirm', () => {

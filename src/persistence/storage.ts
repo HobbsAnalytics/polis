@@ -23,10 +23,14 @@ export function loadCity(): CityState | null {
 
 /** Forward-migrate known older saves so they aren't lost on version bumps. */
 function migrate(obj: Record<string, unknown>): unknown {
-  if (obj.version === 2 && obj.profile == null) {
-    return { ...obj, profile: DEFAULT_PROFILE, version: 3 };
+  let o = obj;
+  if (o.version === 2 && o.profile == null) {
+    o = { ...o, profile: DEFAULT_PROFILE, version: 3 };
   }
-  return obj;
+  if (o.version === 3 && o.milestones == null) {
+    o = { ...o, milestones: [], version: 4 };
+  }
+  return o;
 }
 
 export function exportCity(state: CityState): string {
@@ -62,6 +66,7 @@ function isCityState(obj: unknown): obj is CityState {
     c.settings !== null &&
     typeof c.profile === 'object' &&
     c.profile !== null &&
+    Array.isArray(c.milestones) &&
     Array.isArray(c.districts) &&
     Array.isArray(c.boroughs) &&
     Array.isArray(c.landmarks) &&

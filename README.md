@@ -28,7 +28,10 @@ the full design.
   **Era** (Age-of-Empires-flavored life stage from `src/data/eras.ts`, derived from
   age) shown as a banner. A second **Life** tab renders life as a grid of weeks
   (52/row, 5-year gaps; grey = lived, green = now, white = future) with labeled era
-  bands. Pure math in `src/engine/lifeline.ts`.
+  bands. Each box has a date tooltip (its week's Sunday); the first box of each row
+  is ringed as the birthday week. Users can add **milestones** (wedding, a child's
+  birthday, a move…) that highlight their week in violet. Pure math in
+  `src/engine/lifeline.ts`.
 - **UI** (`src/ui/`) — React "spreadsheet city": district cards (health, maturity,
   feature badges, uncapped neighborhood chips, borough sub-blocks, landmarks), a
   daily check-in, a **habit catalog** (create/attach/remove with cooldown), a

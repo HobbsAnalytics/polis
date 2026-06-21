@@ -22,13 +22,23 @@ it('loadCity returns null for an unknown stale version', () => {
   expect(loadCity()).toBeNull();
 });
 
-it('migrates a v2 save (no profile) up to v3 with a default profile', () => {
+it('migrates a v2 save (no profile/milestones) up to current with defaults', () => {
   const s = createSeededCity();
-  const { profile: _drop, ...noProfile } = s;
-  saveCity({ ...noProfile, version: 2 } as unknown as typeof s);
+  const { profile: _p, milestones: _m, ...old } = s;
+  saveCity({ ...old, version: 2 } as unknown as typeof s);
   const loaded = loadCity();
-  expect(loaded?.version).toBe(3);
+  expect(loaded?.version).toBe(4);
   expect(loaded?.profile.lifespanYears).toBe(75);
+  expect(loaded?.milestones).toEqual([]);
+});
+
+it('migrates a v3 save (no milestones) up to v4', () => {
+  const s = createSeededCity();
+  const { milestones: _m, ...old } = s;
+  saveCity({ ...old, version: 3 } as unknown as typeof s);
+  const loaded = loadCity();
+  expect(loaded?.version).toBe(4);
+  expect(loaded?.milestones).toEqual([]);
 });
 
 it('export then import round-trips deep-equal', () => {

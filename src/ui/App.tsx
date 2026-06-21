@@ -10,6 +10,8 @@ import {
   cancelHabitRemoval,
   confirmHabitRemoval,
   setProfile,
+  addMilestone,
+  removeMilestone,
 } from '../engine/engine.ts';
 import { buildCityViewModel } from '../engine/viewModel.ts';
 import { buildLifeline } from '../engine/lifeline.ts';
@@ -109,6 +111,13 @@ export function App() {
 
   function handleSetProfile(profile: Profile) {
     if (city) update(setProfile(city, profile));
+  }
+
+  function handleAddMilestone(label: string, dateISO: string) {
+    if (city) update(addMilestone(city, { id: crypto.randomUUID(), label, dateISO }));
+  }
+  function handleRemoveMilestone(id: string) {
+    if (city) update(removeMilestone(city, id));
   }
 
   function handleRequestRemoval(id: string) {
@@ -242,7 +251,15 @@ export function App() {
           <DevPanel onAdvance={handleAdvance} onReset={handleReset} />
         </>
       ) : (
-        <LifePage vm={lifeline} profile={city.profile} eras={LIFE_ERAS} onSetProfile={handleSetProfile} />
+        <LifePage
+          vm={lifeline}
+          profile={city.profile}
+          eras={LIFE_ERAS}
+          milestones={city.milestones}
+          onSetProfile={handleSetProfile}
+          onAddMilestone={handleAddMilestone}
+          onRemoveMilestone={handleRemoveMilestone}
+        />
       )}
     </div>
   );

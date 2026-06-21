@@ -1,6 +1,6 @@
 import type { Profile, Settings } from './types.ts';
 
-export const CITY_VERSION = 3;
+export const CITY_VERSION = 4;
 
 export const DEFAULT_PROFILE: Profile = {
   birthDateISO: '1988-11-01',

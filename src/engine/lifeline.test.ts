@@ -1,5 +1,5 @@
 import { it, expect } from '../testkit.ts';
-import { weeksLived, ageYears, currentEra, buildLifeline } from './lifeline.ts';
+import { weeksLived, ageYears, currentEra, buildLifeline, weekSundayISO } from './lifeline.ts';
 import { LIFE_ERAS } from '../data/eras.ts';
 import type { Profile } from './types.ts';
 
@@ -11,6 +11,16 @@ it('weeksLived counts whole weeks since birth (clamped at 0)', () => {
 it('ageYears is weeks / 52 floored', () => {
   expect(ageYears(104)).toBe(2);
   expect(ageYears(103)).toBe(1);
+});
+
+it('weekSundayISO returns the Sunday within each birthday-anchored week', () => {
+  // 2000-01-02 is a Sunday → week 0 is itself; week 1 is the next Sunday.
+  expect(weekSundayISO('2000-01-02', 0)).toBe('2000-01-02');
+  expect(weekSundayISO('2000-01-02', 1)).toBe('2000-01-09');
+  // 2000-01-01 is a Saturday → its week's Sunday is the next day.
+  expect(weekSundayISO('2000-01-01', 0)).toBe('2000-01-02');
+  // Result is always a Sunday.
+  expect(new Date(weekSundayISO('1988-11-01', 500)).getUTCDay()).toBe(0);
 });
 
 it('currentEra matches range boundaries and clamps past lifespan', () => {
