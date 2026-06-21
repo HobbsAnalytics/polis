@@ -4,9 +4,10 @@ import type {
   District,
   Habit,
   Landmark,
+  Profile,
   Settings,
 } from './types.ts';
-import { CITY_VERSION, DEFAULT_SETTINGS, FEATURES } from './settings.ts';
+import { CITY_VERSION, DEFAULT_PROFILE, DEFAULT_SETTINGS, FEATURES } from './settings.ts';
 import { districtHealth, habitsTargeting } from './rollup.ts';
 
 export function clamp01(n: number): number {
@@ -22,6 +23,7 @@ export function dayDiffISO(aISO: string, bISO: string): number {
 
 export interface CreateCityOpts {
   settings?: Settings;
+  profile?: Profile;
   districts?: District[];
   boroughs?: Borough[];
   landmarks?: Landmark[];
@@ -33,6 +35,7 @@ export function createCity(opts: CreateCityOpts = {}): CityState {
     version: CITY_VERSION,
     day: 0,
     settings: opts.settings ?? DEFAULT_SETTINGS,
+    profile: opts.profile ?? DEFAULT_PROFILE,
     districts: opts.districts ?? [],
     boroughs: opts.boroughs ?? [],
     landmarks: opts.landmarks ?? [],
@@ -152,6 +155,10 @@ export function applyMissedDay(state: CityState): CityState {
 
 export function addHabit(state: CityState, habit: Habit): CityState {
   return { ...state, habits: [...state.habits, habit] };
+}
+
+export function setProfile(state: CityState, profile: Profile): CityState {
+  return { ...state, profile };
 }
 
 export function addLandmark(

@@ -24,11 +24,16 @@ the full design.
   can replace the React cards without touching the engine.
 - **Persistence** (`src/persistence/`) — localStorage + JSON export/import +
   elapsed-day catch-up. A `version` field re-seeds on incompatible saves.
+- **Eras + Life page** — a city-level `profile` (birthday + lifespan) drives an
+  **Era** (Age-of-Empires-flavored life stage from `src/data/eras.ts`, derived from
+  age) shown as a banner. A second **Life** tab renders life as a grid of weeks
+  (52/row, 5-year gaps; grey = lived, green = now, white = future) with labeled era
+  bands. Pure math in `src/engine/lifeline.ts`.
 - **UI** (`src/ui/`) — React "spreadsheet city": district cards (health, maturity,
   feature badges, uncapped neighborhood chips, borough sub-blocks, landmarks), a
-  daily check-in, a **habit catalog** (create/attach/remove with cooldown), and a
-  landmark builder that attaches habits from the catalog. A temporary
-  `DevPanel` time-travels days for tuning (clearly marked; remove before release).
+  daily check-in, a **habit catalog** (create/attach/remove with cooldown), a
+  landmark builder that attaches habits from the catalog, and the City/Life tabs. A
+  temporary `DevPanel` time-travels days for tuning (clearly marked; remove before release).
 
 ## Commands
 

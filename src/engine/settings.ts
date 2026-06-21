@@ -1,6 +1,11 @@
-import type { Settings } from './types.ts';
+import type { Profile, Settings } from './types.ts';
 
-export const CITY_VERSION = 2;
+export const CITY_VERSION = 3;
+
+export const DEFAULT_PROFILE: Profile = {
+  birthDateISO: '1988-11-01',
+  lifespanYears: 75,
+};
 
 /**
  * Defaults tuned so one missed day is noise and ~3 neglected weeks clearly shows.

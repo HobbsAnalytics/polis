@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CityState } from '../engine/types.ts';
+import type { Profile } from '../engine/types.ts';
 import {
   addHabit,
   addLandmark,
@@ -8,17 +9,23 @@ import {
   requestHabitRemoval,
   cancelHabitRemoval,
   confirmHabitRemoval,
+  setProfile,
 } from '../engine/engine.ts';
 import { buildCityViewModel } from '../engine/viewModel.ts';
+import { buildLifeline } from '../engine/lifeline.ts';
 import { createSeededCity } from '../engine/seed.ts';
+import { LIFE_ERAS } from '../data/eras.ts';
 import { saveCity, loadCity, exportCity, importCity, catchUpMissedDays } from '../persistence/storage.ts';
 import { CityView } from './CityView.tsx';
 import { CheckIn } from './CheckIn.tsx';
 import { NewLandmark } from './NewLandmark.tsx';
 import { HabitCatalog } from './HabitCatalog.tsx';
 import type { NewHabitFields } from './HabitCatalog.tsx';
+import { LifePage } from './LifePage.tsx';
 import { DevPanel } from './DevPanel.tsx';
 import type { AdvanceMode } from './DevPanel.tsx';
+
+type Page = 'city' | 'life';
 
 const LAST_RESOLVED = 'polis.lastResolved';
 const LAST_CHECKIN = 'polis.lastCheckIn';
@@ -36,6 +43,7 @@ function addDays(iso: string, n: number): string {
 export function App() {
   const [city, setCity] = useState<CityState | null>(null);
   const [lastCheckIn, setLastCheckIn] = useState<string | null>(null);
+  const [page, setPage] = useState<Page>('city');
   const initialized = useRef(false);
 
   useEffect(() => {
@@ -99,6 +107,10 @@ export function App() {
     update(addLandmark(city, { districtId, boroughId, name, attachHabitIds }).state);
   }
 
+  function handleSetProfile(profile: Profile) {
+    if (city) update(setProfile(city, profile));
+  }
+
   function handleRequestRemoval(id: string) {
     if (city) update(requestHabitRemoval(city, id, todayStr()));
   }
@@ -155,6 +167,8 @@ export function App() {
   }
 
   const vm = buildCityViewModel(city);
+  const lifeline = buildLifeline(city.profile, todayStr(), LIFE_ERAS);
+  const era = LIFE_ERAS.find((e) => e.id === lifeline.currentEraId);
   const canCheckIn = lastCheckIn !== todayStr();
 
   return (
@@ -165,6 +179,14 @@ export function App() {
           <p className="subtitle">Your city, your self · day {vm.day}</p>
         </div>
         <div className="toolbar">
+          <div className="tabs">
+            <button className={`tab ${page === 'city' ? 'tab-on' : ''}`} onClick={() => setPage('city')}>
+              City
+            </button>
+            <button className={`tab ${page === 'life' ? 'tab-on' : ''}`} onClick={() => setPage('life')}>
+              Life
+            </button>
+          </div>
           <button onClick={handleExport} className="btn">
             Export
           </button>
@@ -184,28 +206,44 @@ export function App() {
         </div>
       </header>
 
-      <CheckIn habits={city.habits} canCheckIn={canCheckIn} onComplete={handleCheckIn} />
-      <CityView vm={vm} />
-      <div style={{ height: '1.5rem' }} />
-      <HabitCatalog
-        habits={city.habits}
-        districts={city.districts}
-        boroughs={city.boroughs}
-        landmarks={city.landmarks}
-        today={todayStr()}
-        cooldownDays={city.settings.removalCooldownDays}
-        onCreateHabit={handleCreateHabit}
-        onRequestRemoval={handleRequestRemoval}
-        onCancelRemoval={handleCancelRemoval}
-        onConfirmRemoval={handleConfirmRemoval}
-      />
-      <NewLandmark
-        districts={city.districts.map((d) => ({ id: d.id, name: d.name }))}
-        boroughs={city.boroughs}
-        habits={city.habits}
-        onCreate={handleCreateLandmark}
-      />
-      <DevPanel onAdvance={handleAdvance} onReset={handleReset} />
+      {era && (
+        <div className="era-banner" style={{ borderLeftColor: era.color }}>
+          <span className="era-name">{era.name}</span>
+          <span className="era-meta">
+            {era.stage} · age {lifeline.age} · week {(lifeline.weeksLived + 1).toLocaleString()} of{' '}
+            {lifeline.totalWeeks.toLocaleString()}
+          </span>
+        </div>
+      )}
+
+      {page === 'city' ? (
+        <>
+          <CheckIn habits={city.habits} canCheckIn={canCheckIn} onComplete={handleCheckIn} />
+          <CityView vm={vm} />
+          <div style={{ height: '1.5rem' }} />
+          <HabitCatalog
+            habits={city.habits}
+            districts={city.districts}
+            boroughs={city.boroughs}
+            landmarks={city.landmarks}
+            today={todayStr()}
+            cooldownDays={city.settings.removalCooldownDays}
+            onCreateHabit={handleCreateHabit}
+            onRequestRemoval={handleRequestRemoval}
+            onCancelRemoval={handleCancelRemoval}
+            onConfirmRemoval={handleConfirmRemoval}
+          />
+          <NewLandmark
+            districts={city.districts.map((d) => ({ id: d.id, name: d.name }))}
+            boroughs={city.boroughs}
+            habits={city.habits}
+            onCreate={handleCreateLandmark}
+          />
+          <DevPanel onAdvance={handleAdvance} onReset={handleReset} />
+        </>
+      ) : (
+        <LifePage vm={lifeline} profile={city.profile} eras={LIFE_ERAS} onSetProfile={handleSetProfile} />
+      )}
     </div>
   );
 }

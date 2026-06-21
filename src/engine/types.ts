@@ -72,10 +72,16 @@ export interface Settings {
   removalCooldownDays: number;
 }
 
+export interface Profile {
+  birthDateISO: string;
+  lifespanYears: number;
+}
+
 export interface CityState {
   version: number;
   day: number;
   settings: Settings;
+  profile: Profile;
   districts: District[];
   boroughs: Borough[];
   landmarks: Landmark[];
