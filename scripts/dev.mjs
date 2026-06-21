@@ -7,7 +7,7 @@ const ctx = await esbuild.context({
   entryPoints: ['src/main.tsx'],
   bundle: true,
   outfile: 'public/app.js',
-  format: 'esm',
+  format: 'iife',
   jsx: 'automatic',
   sourcemap: true,
   logLevel: 'info',

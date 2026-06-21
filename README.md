@@ -38,17 +38,30 @@ the full design.
   landmark builder that attaches habits from the catalog, and the City/Life tabs. A
   temporary `DevPanel` time-travels days for tuning (clearly marked; remove before release).
 
-## Commands
+## Run it
+
+**Zero install — just open it.** The built bundle is committed, so:
 
 ```bash
-npm install      # react, react-dom, esbuild
-npm test         # run the engine + persistence suite
-npm run dev      # esbuild dev server at http://localhost:8000
-npm run build    # bundle to public/app.js
+open public/index.html      # macOS; or double-click the file in any OS
 ```
 
-Open `public/index.html` (served by `npm run dev`). State saves to your browser's
-localStorage; use Export/Import to back up or move between machines.
+It's a self-contained static page (one HTML + one JS + one CSS file). No server, no
+install, works offline. State saves to your browser's localStorage; use
+Export/Import to back up or move between machines.
+
+**To develop / re-build** (only needs Node):
+
+```bash
+npm install      # react, react-dom, esbuild — the only external deps
+npm test         # engine + persistence + lifeline suite (Node's built-in runner)
+npm run dev      # live-reload dev server (esbuild) at http://localhost:8000
+npm run build    # rebuild public/app.js (commit it so the zero-install path stays current)
+```
+
+The engine (`src/engine`) is pure TypeScript with **no UI/DOM/React imports**, so you
+can build on it and replace the front end freely; the React UI reads only the
+serializable view model it emits.
 
 ## Toolchain note (why not Vite/Vitest?)
 
