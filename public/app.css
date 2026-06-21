@@ -380,6 +380,12 @@ body {
   background: #fff;
   border-color: var(--stone-200);
 }
+/* Left-most box of each row = the week of your birthday (start of a new age). */
+.life-birthday {
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 0 0 2px #b45309;
+}
 
 /* Maturity + features */
 .maturity {

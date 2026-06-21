@@ -83,8 +83,12 @@ export function LifePage({ vm, profile, eras, onSetProfile }: Props) {
               >
                 <div className="life-era-label">{row.eraStart ? era?.name : ''}</div>
                 <div className="life-weeks">
-                  {row.weeks.map((c) => (
-                    <span key={c.index} className={`life-box life-${c.status}`} />
+                  {row.weeks.map((c, i) => (
+                    <span
+                      key={c.index}
+                      className={`life-box life-${c.status} ${i === 0 ? 'life-birthday' : ''}`}
+                      title={i === 0 ? `Birthday week — start of age ${row.yearIndex}` : undefined}
+                    />
                   ))}
                 </div>
               </div>
