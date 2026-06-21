@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CityState } from '../engine/types.ts';
-import { addHabit, addLandmark, applyCheckIn } from '../engine/engine.ts';
+import { addHabit, addLandmark, applyCheckIn, applyMissedDay } from '../engine/engine.ts';
 import { buildCityViewModel } from '../engine/viewModel.ts';
 import { createSeededCity } from '../engine/seed.ts';
 import { saveCity, loadCity, exportCity, importCity, catchUpMissedDays } from '../persistence/storage.ts';
 import { CityView } from './CityView.tsx';
 import { CheckIn } from './CheckIn.tsx';
 import { NewLandmark } from './NewLandmark.tsx';
+import { DevPanel } from './DevPanel.tsx';
+import type { AdvanceMode } from './DevPanel.tsx';
 
 const LAST_RESOLVED = 'polis.lastResolved';
 const LAST_CHECKIN = 'polis.lastCheckIn';
@@ -82,6 +84,29 @@ export function App() {
     update(s);
   }
 
+  // --- TEMPORARY: time-travel debug controls (remove before final release) ---
+  function handleAdvance(times: number, mode: AdvanceMode) {
+    if (!city) return;
+    const goodIds = city.habits.filter((h) => h.kind === 'good').map((h) => h.id);
+    const badIds = city.habits.filter((h) => h.kind === 'bad').map((h) => h.id);
+    let s = city;
+    for (let i = 0; i < times; i++) {
+      if (mode === 'good') s = applyCheckIn(s, { completedHabitIds: goodIds, loggedBadHabitIds: [] });
+      else if (mode === 'bad') s = applyCheckIn(s, { completedHabitIds: [], loggedBadHabitIds: badIds });
+      else s = applyMissedDay(s);
+    }
+    update(s);
+  }
+
+  function handleReset() {
+    const s = createSeededCity();
+    localStorage.removeItem(LAST_CHECKIN);
+    localStorage.setItem(LAST_RESOLVED, todayStr());
+    setLastCheckIn(null);
+    update(s);
+  }
+  // --- END TEMPORARY ---
+
   function handleExport() {
     if (!city) return;
     const blob = new Blob([exportCity(city)], { type: 'application/json' });
@@ -143,6 +168,7 @@ export function App() {
         districts={city.districts.map((d) => ({ id: d.id, name: d.name }))}
         onCreate={handleCreateLandmark}
       />
+      <DevPanel onAdvance={handleAdvance} onReset={handleReset} />
     </div>
   );
 }

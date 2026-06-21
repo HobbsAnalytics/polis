@@ -261,6 +261,37 @@ body {
   height: 1px;
 }
 
+/* Temporary dev panel */
+.dev-panel {
+  border: 1px dashed var(--stone-400);
+  background: #fffdf5;
+  margin-top: 1.5rem;
+}
+.dev-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.dev-rows {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.dev-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--stone-200);
+}
+.dev-buttons {
+  display: flex;
+  gap: 0.375rem;
+}
+
 /* Condition colors */
 .cond-pristine {
   background: var(--pristine);
