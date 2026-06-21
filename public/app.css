@@ -334,7 +334,7 @@ body {
   border: 1px solid rgba(0, 0, 0, 0.1);
 }
 .lifegrid {
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 .life-row {
   display: flex;
@@ -343,7 +343,7 @@ body {
   padding-left: 0.5rem;
 }
 .life-row-gap {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.6rem;
 }
 .life-era-label {
   width: 9rem;
@@ -354,14 +354,16 @@ body {
   white-space: nowrap;
 }
 .life-weeks {
-  display: flex;
-  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(52, 1fr);
+  gap: 3px;
 }
 .life-box {
-  width: 9px;
-  height: 9px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
   border-radius: 1px;
-  flex-shrink: 0;
 }
 .life-lived {
   background: var(--stone-300);
