@@ -4,10 +4,43 @@
 > living portrait of your holistic wellbeing.
 
 Tend your habits and the city grows, sprawls, and gleams. Neglect or sabotage
-yourself and districts fade, crumble, or burn. See `docs/superpowers/specs/` for
-the full design.
+yourself and districts fade, crumble, or burn.
 
-## Status: Phase 1 + v2 (engine + "spreadsheet city")
+## Status & roadmap
+
+Fully working personal tool. Detailed design docs and implementation plans live in
+`docs/superpowers/specs/` and `docs/superpowers/plans/` (one per milestone).
+
+**Done**
+
+- [x] **Simulation engine** — District → Borough (optional) → Landmark hierarchy;
+  weighted good/bad habits; weighted health roll-up; entropy; unbounded maturity that
+  unlocks organic features; sticky landmark tiers. Pure TypeScript, no UI deps.
+- [x] **Persistence** — localStorage, JSON export/import, versioned save migrations.
+- [x] **City page** — "spreadsheet" view: daily check-in, habit catalog
+  (create/attach/remove with a two-day removal cooldown), landmark builder.
+- [x] **Life page** — Eras banner (life stage from age), life-in-weeks grid with
+  per-week date tooltips, birthday-week markers, and user milestones.
+- [x] **Hex City Map (Stage 2)** — unified SVG hex city; per-tile image hook so
+  custom art (e.g. Midjourney) can replace colored hexes incrementally.
+- [x] **Delivery** — zero-install static build (esbuild → committed bundle, runs from
+  `file://`), tests on Node's built-in runner, private GitHub repo.
+
+**Planned / ideas**
+
+- [ ] **Stage 3 visuals** — real tile art via the image hook; richer decay overlays
+  / light animation (fire, weeds).
+- [ ] **Rubble tiles** so a fully-decayed (0-building) district still shows on the map
+  instead of disappearing.
+- [ ] **Replace placeholder content** — swap the placeholder districts/boroughs/habits
+  for the real wellbeing framework (virtues / PERMA / …). Content only, no code change.
+- [ ] **Tune constants** in `src/engine/settings.ts` by feel during real use.
+- [ ] **Remove the temporary `DevPanel`** (time-travel) before any "real" release.
+- [ ] **Later, maybe** — borough regions drawn on the map; era-driven city restyling;
+  landmark removal cooldown; cross-device sync (backend); graded/intensity habits;
+  backfill of missed days.
+
+## Architecture & features
 
 - **Engine** (`src/engine/`) — a pure-TypeScript simulation. Three-level hierarchy:
   **District → Borough (optional) → Landmark**, with binary good/bad **habits**
@@ -20,8 +53,8 @@ the full design.
 - **Catalog** (`src/data/catalog.ts`) — the human-editable source of the default
   districts, boroughs, and habits (name, kind, weight, target).
 - **View model** (`src/engine/viewModel.ts`) — the renderer seam. The UI consumes
-  only this serializable read-only model, so a future PixiJS renderer (Stage 2/3)
-  can replace the React cards without touching the engine.
+  only this serializable read-only model, so a richer-art renderer (Stage 3) can
+  replace the current views without touching the engine.
 - **Persistence** (`src/persistence/`) — localStorage + JSON export/import +
   elapsed-day catch-up. A `version` field re-seeds on incompatible saves.
 - **Hex City Map (Map tab)** — a unified hex-tile view of the city, derived from the
