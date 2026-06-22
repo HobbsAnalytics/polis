@@ -2,19 +2,18 @@ import { it, expect } from '../testkit.ts';
 import { createSeededCity } from './seed.ts';
 import { CITY_VERSION } from './settings.ts';
 
-it('seeded city matches the catalog: districts, borough, landmark, weighted habits', () => {
+it('seeded city is a minimal scaffold: a single "Home" district, nothing else', () => {
   const s = createSeededCity();
   expect(s.version).toBe(CITY_VERSION);
-  expect(s.districts).toHaveLength(3);
-  expect(s.boroughs).toHaveLength(1);
-  expect(s.landmarks.length).toBeGreaterThanOrEqual(1);
+  expect(s.profile.name).toBe('');
 
-  // habits exist for each targeting level
-  const kinds = new Set(s.habits.map((h) => h.target.kind));
-  expect(kinds.has('district')).toBe(true);
-  expect(kinds.has('borough')).toBe(true);
-  expect(kinds.has('landmark')).toBe(true);
+  // exactly one starter district named "Home", using the addDistrict id scheme
+  expect(s.districts).toHaveLength(1);
+  expect(s.districts[0].name).toBe('Home');
+  expect(s.districts[0].id).toBe('district-1');
 
-  // a weight other than 1 came through from the catalog
-  expect(s.habits.some((h) => h.weight === 2)).toBe(true);
+  // no sample content
+  expect(s.boroughs).toHaveLength(0);
+  expect(s.habits).toHaveLength(0);
+  expect(s.landmarks).toHaveLength(0);
 });
