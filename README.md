@@ -24,6 +24,12 @@ the full design.
   can replace the React cards without touching the engine.
 - **Persistence** (`src/persistence/`) — localStorage + JSON export/import +
   elapsed-day catch-up. A `version` field re-seeds on incompatible saves.
+- **Hex City Map (Map tab)** — a unified hex-tile view of the city, derived from the
+  view model (`src/engine/cityscape.ts`, pure). Each hex is a building, districts are
+  neighborhood patches, color shows condition, features/landmarks are marked, and a
+  hover tooltip gives detail. Tiles can reference images via `src/data/tiles.ts` +
+  `public/tiles/` (drop in art — e.g. Midjourney — to replace colored hexes,
+  incrementally and per kind/condition/district). SVG, no new dependency.
 - **Eras + Life page** — a city-level `profile` (birthday + lifespan) drives an
   **Era** (Age-of-Empires-flavored life stage from `src/data/eras.ts`, derived from
   age) shown as a banner. A second **Life** tab renders life as a grid of weeks

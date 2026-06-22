@@ -24,10 +24,11 @@ import { NewLandmark } from './NewLandmark.tsx';
 import { HabitCatalog } from './HabitCatalog.tsx';
 import type { NewHabitFields } from './HabitCatalog.tsx';
 import { LifePage } from './LifePage.tsx';
+import { CityMap } from './CityMap.tsx';
 import { DevPanel } from './DevPanel.tsx';
 import type { AdvanceMode } from './DevPanel.tsx';
 
-type Page = 'city' | 'life';
+type Page = 'city' | 'map' | 'life';
 
 const LAST_RESOLVED = 'polis.lastResolved';
 const LAST_CHECKIN = 'polis.lastCheckIn';
@@ -192,6 +193,9 @@ export function App() {
             <button className={`tab ${page === 'city' ? 'tab-on' : ''}`} onClick={() => setPage('city')}>
               City
             </button>
+            <button className={`tab ${page === 'map' ? 'tab-on' : ''}`} onClick={() => setPage('map')}>
+              Map
+            </button>
             <button className={`tab ${page === 'life' ? 'tab-on' : ''}`} onClick={() => setPage('life')}>
               Life
             </button>
@@ -225,7 +229,7 @@ export function App() {
         </div>
       )}
 
-      {page === 'city' ? (
+      {page === 'city' && (
         <>
           <CheckIn habits={city.habits} canCheckIn={canCheckIn} onComplete={handleCheckIn} />
           <CityView vm={vm} />
@@ -250,7 +254,9 @@ export function App() {
           />
           <DevPanel onAdvance={handleAdvance} onReset={handleReset} />
         </>
-      ) : (
+      )}
+      {page === 'map' && <CityMap vm={vm} />}
+      {page === 'life' && (
         <LifePage
           vm={lifeline}
           profile={city.profile}

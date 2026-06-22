@@ -402,6 +402,21 @@ body {
   background: #7c3aed;
   vertical-align: -1px;
 }
+/* Hex city map */
+.citymap {
+  position: relative;
+  overflow-x: auto;
+}
+.citymap svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.citymap [data-info]:hover polygon {
+  stroke: var(--stone-900);
+  stroke-width: 2;
+}
+
 /* Custom hover tooltip for week boxes (native title is unreliable on tiny cells). */
 .week-tip {
   position: fixed;
