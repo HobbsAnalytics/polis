@@ -478,6 +478,48 @@ body {
   max-width: 30rem;
 }
 
+/* Inline editors (Profile page) */
+.habit-edit {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.inline-edit {
+  border: 1px solid var(--stone-300);
+  border-radius: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  font: inherit;
+  min-width: 10rem;
+}
+.inline-edit-desc {
+  flex: 1;
+  min-width: 14rem;
+  color: var(--stone-600);
+}
+.weight-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.875rem;
+  color: var(--stone-600);
+}
+.weight-edit input {
+  width: 3.5rem;
+  border: 1px solid var(--stone-300);
+  border-radius: 0.5rem;
+  padding: 0.3rem 0.4rem;
+  font: inherit;
+}
+.district-edit-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--stone-200);
+}
+
 /* Temporary dev panel */
 .dev-panel {
   border: 1px dashed var(--stone-400);

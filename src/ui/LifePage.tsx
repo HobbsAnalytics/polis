@@ -1,7 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { Milestone, Profile } from '../engine/types.ts';
 import type { LifelineVM } from '../engine/lifeline.ts';
 import { weekSundayISO } from '../engine/lifeline.ts';
+import { weekIndex } from '../engine/dates.ts';
+import { useTooltip } from './useTooltip.tsx';
+import { formatDate } from './format.ts';
 import type { EraDef } from '../data/eras.ts';
 
 interface Props {
@@ -9,64 +12,19 @@ interface Props {
   profile: Profile;
   eras: EraDef[];
   milestones: Milestone[];
-  onSetProfile: (profile: Profile) => void;
-  onAddMilestone: (label: string, dateISO: string) => void;
-  onRemoveMilestone: (id: string) => void;
 }
 
-const MS_PER_WEEK = 7 * 86_400_000;
-
-function formatDate(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
-}
-
-function milestoneWeekIndex(birthDateISO: string, dateISO: string): number {
-  return Math.floor((Date.parse(dateISO) - Date.parse(birthDateISO)) / MS_PER_WEEK);
-}
-
-interface Tip {
-  text: string;
-  x: number;
-  y: number;
-}
-
-export function LifePage({
-  vm,
-  profile,
-  eras,
-  milestones,
-  onSetProfile,
-  onAddMilestone,
-  onRemoveMilestone,
-}: Props) {
-  const [label, setLabel] = useState('');
-  const [dateISO, setDateISO] = useState('');
-  const [error, setError] = useState('');
-  const [tip, setTip] = useState<Tip | null>(null);
+export function LifePage({ vm, profile, eras, milestones }: Props) {
+  const { handlers, tooltip } = useTooltip('.life-box', 240);
 
   const eraById = (id: string) => eras.find((e) => e.id === id);
   const currentEra = eraById(vm.currentEraId);
   const pctLeft = Math.round((vm.weeksLeft / vm.totalWeeks) * 100);
 
   const isOnChart = (m: Milestone) => {
-    const idx = milestoneWeekIndex(profile.birthDateISO, m.dateISO);
+    const idx = weekIndex(profile.birthDateISO, m.dateISO);
     return idx >= 0 && idx < vm.totalWeeks;
   };
-
-  function submitMilestone() {
-    if (!label.trim()) return setError('Name the date.');
-    if (!dateISO) return setError('Pick a date.');
-    setError('');
-    onAddMilestone(label.trim(), dateISO);
-    setLabel('');
-    setDateISO('');
-  }
 
   // The grid is expensive (~3,900 cells) — memoize so cursor moves (which only
   // touch tooltip state) don't rebuild it. Each cell carries its info in
@@ -74,7 +32,7 @@ export function LifePage({
   const grid = useMemo(() => {
     const byWeek = new Map<number, Milestone[]>();
     for (const m of milestones) {
-      const idx = milestoneWeekIndex(profile.birthDateISO, m.dateISO);
+      const idx = weekIndex(profile.birthDateISO, m.dateISO);
       if (idx >= 0 && idx < vm.totalWeeks) {
         byWeek.set(idx, [...(byWeek.get(idx) ?? []), m]);
       }
@@ -88,15 +46,7 @@ export function LifePage({
     };
 
     return (
-      <div
-        className="lifegrid"
-        onMouseMove={(e) => {
-          const el = (e.target as HTMLElement).closest('.life-box');
-          const info = el?.getAttribute('data-info');
-          setTip(info ? { text: info, x: e.clientX, y: e.clientY } : null);
-        }}
-        onMouseLeave={() => setTip(null)}
-      >
+      <div className="lifegrid" {...handlers}>
         {vm.years.map((row) => {
           const era = eraById(row.eraId);
           const blockGap = row.yearIndex % 5 === 4;
@@ -130,7 +80,8 @@ export function LifePage({
         <h2>Your life in weeks</h2>
         <p className="muted">
           Each box is one week (hover for its date). A row is a year (52 weeks); every 5th year is
-          spaced for scanning. Lifespan assumed {profile.lifespanYears} years.
+          spaced for scanning. Lifespan assumed {profile.lifespanYears} years. Edit your birthday,
+          lifespan, and milestones on the Profile tab.
         </p>
         <p className="life-summary">
           <strong>{vm.weeksLived.toLocaleString()}</strong> weeks lived ·{' '}
@@ -142,57 +93,12 @@ export function LifePage({
             </>
           )}
         </p>
-
-        <div className="form-grid">
-          <label className="field">
-            Birthday
-            <input
-              type="date"
-              name="birthday"
-              value={profile.birthDateISO}
-              onChange={(e) => onSetProfile({ ...profile, birthDateISO: e.target.value })}
-            />
-          </label>
-          <label className="field">
-            Lifespan (years)
-            <input
-              type="number"
-              name="lifespan"
-              min={1}
-              value={profile.lifespanYears}
-              onChange={(e) =>
-                onSetProfile({ ...profile, lifespanYears: Math.max(1, Number(e.target.value) || 1) })
-              }
-            />
-          </label>
-        </div>
       </div>
 
-      <div className="panel">
-        <h2>Important dates</h2>
-        <p className="muted">Mark milestones — a wedding, a child's birthday, a new job, a move.</p>
-        <div className="form-grid">
-          <label className="field">
-            Label
-            <input
-              name="milestoneLabel"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g. Wedding"
-            />
-          </label>
-          <label className="field">
-            Date
-            <input type="date" name="milestoneDate" value={dateISO} onChange={(e) => setDateISO(e.target.value)} />
-          </label>
-        </div>
-        {error && <p className="note-warn">{error}</p>}
-        <button onClick={submitMilestone} className="btn-primary" style={{ marginTop: '0.5rem' }}>
-          Add date
-        </button>
-
-        {milestones.length > 0 && (
-          <div className="habit-list" style={{ marginTop: '0.75rem' }}>
+      {milestones.length > 0 && (
+        <div className="panel">
+          <h2>Important dates</h2>
+          <div className="habit-list">
             {milestones.map((m) => (
               <div key={m.id} className="habit-row">
                 <div>
@@ -202,14 +108,11 @@ export function LifePage({
                     {!isOnChart(m) && ' · (off the chart)'}
                   </span>
                 </div>
-                <button className="btn" onClick={() => onRemoveMilestone(m.id)}>
-                  Remove
-                </button>
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="panel">
         <div className="legend">
@@ -224,14 +127,7 @@ export function LifePage({
         {grid}
       </div>
 
-      {tip && (
-        <div
-          className="week-tip"
-          style={{ left: Math.min(tip.x + 14, window.innerWidth - 240), top: tip.y + 14 }}
-        >
-          {tip.text}
-        </div>
-      )}
+      {tooltip}
     </div>
   );
 }

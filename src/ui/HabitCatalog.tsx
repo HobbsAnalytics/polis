@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Borough, District, Habit, Landmark, NodeKind } from '../engine/types.ts';
-import { dayDiffISO } from '../engine/engine.ts';
+import { dayDiffISO } from '../engine/dates.ts';
 
 export interface NewHabitFields {
   name: string;
@@ -17,6 +17,7 @@ interface Props {
   today: string;
   cooldownDays: number;
   onCreateHabit: (fields: NewHabitFields) => void;
+  onUpdateHabit: (habitId: string, fields: { name?: string; weight?: number }) => void;
   onRequestRemoval: (habitId: string) => void;
   onCancelRemoval: (habitId: string) => void;
   onConfirmRemoval: (habitId: string) => void;
@@ -30,6 +31,7 @@ export function HabitCatalog({
   today,
   cooldownDays,
   onCreateHabit,
+  onUpdateHabit,
   onRequestRemoval,
   onCancelRemoval,
   onConfirmRemoval,
@@ -140,10 +142,26 @@ export function HabitCatalog({
           const daysLeft = pending ? cooldownDays - dayDiffISO(pending, today) : 0;
           return (
             <div key={h.id} className="habit-row">
-              <div>
-                <span className="landmark-name">{h.name}</span>{' '}
+              <div className="habit-edit">
+                <input
+                  className="inline-edit"
+                  value={h.name}
+                  aria-label="Habit name"
+                  onChange={(e) => onUpdateHabit(h.id, { name: e.target.value })}
+                />
                 <span className={`badge ${h.kind === 'bad' ? 'tcond-onfire' : 'tcond-pristine'}`}>{h.kind}</span>
-                <span className="tier"> ·×{h.weight} · {resolveDistrictName(h)}</span>
+                <label className="weight-edit">
+                  ×
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={h.weight}
+                    aria-label="Habit weight"
+                    onChange={(e) => onUpdateHabit(h.id, { weight: Math.max(1, Number(e.target.value) || 1) })}
+                  />
+                </label>
+                <span className="tier">{resolveDistrictName(h)}</span>
               </div>
               {pending ? (
                 <div className="removal">

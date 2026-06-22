@@ -1,12 +1,12 @@
 import type { BoroughVM, DistrictVM, LandmarkVM } from '../engine/types.ts';
-import { labelSlug } from './labels.ts';
+import { conditionSlug } from '../engine/viewModel.ts';
 
 function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
 }
 
 function LandmarkRow({ lm }: { lm: LandmarkVM }) {
-  const slug = labelSlug(lm.label);
+  const slug = conditionSlug(lm.label);
   return (
     <div className="landmark">
       <div className="landmark-head">
@@ -23,7 +23,7 @@ function LandmarkRow({ lm }: { lm: LandmarkVM }) {
 }
 
 function BoroughBlock({ borough }: { borough: BoroughVM }) {
-  const slug = labelSlug(borough.label);
+  const slug = conditionSlug(borough.label);
   return (
     <div className="borough">
       <div className="landmark-head">
@@ -41,7 +41,7 @@ function BoroughBlock({ borough }: { borough: BoroughVM }) {
 }
 
 export function DistrictCard({ district }: { district: DistrictVM }) {
-  const slug = labelSlug(district.label);
+  const slug = conditionSlug(district.label);
   return (
     <div className="panel" style={{ marginBottom: 0 }}>
       <div className="district-head">
@@ -74,7 +74,7 @@ export function DistrictCard({ district }: { district: DistrictVM }) {
           <span className="abandoned">empty lot</span>
         ) : (
           district.generic.map((b, i) => (
-            <span key={i} className={`chip cond-${labelSlug(b.label)}`} title={b.label} />
+            <span key={i} className={`chip cond-${conditionSlug(b.label)}`} title={b.label} />
           ))
         )}
       </div>

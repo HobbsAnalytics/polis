@@ -17,19 +17,24 @@ Fully working personal tool. Detailed design docs and implementation plans live 
   weighted good/bad habits; weighted health roll-up; entropy; unbounded maturity that
   unlocks organic features; sticky landmark tiers. Pure TypeScript, no UI deps.
 - [x] **Persistence** — localStorage, JSON export/import, versioned save migrations.
-- [x] **City page** — "spreadsheet" view: daily check-in, habit catalog
-  (create/attach/remove with a two-day removal cooldown), landmark builder.
-- [x] **Life page** — Eras banner (life stage from age), life-in-weeks grid with
-  per-week date tooltips, birthday-week markers, and user milestones.
-- [x] **Hex City Map (Stage 2)** — unified SVG hex city; per-tile image hook so
-  custom art (e.g. Midjourney) can replace colored hexes incrementally.
+- [x] **Profile page** — the one place to author content: identity (name, birthday,
+  lifespan), districts and boroughs (add/rename), the habit catalog
+  (create/rename/reweight/remove with a two-day removal cooldown), the landmark
+  builder + manager (create/rename/remove), and milestones. Every other page is
+  read-only.
+- [x] **City page** — read-only "spreadsheet" view plus the daily check-in (the one
+  logging interaction); district cards show health, maturity, features, and landmarks.
+- [x] **Life page** — read-only: Eras banner (life stage from age), life-in-weeks grid
+  with per-week date tooltips, birthday-week markers, and user milestones.
+- [x] **Hex City Map (Stage 2)** — unified SVG hex city derived from the view model;
+  color shows condition, with hover detail.
 - [x] **Delivery** — zero-install static build (esbuild → committed bundle, runs from
   `file://`), tests on Node's built-in runner, private GitHub repo.
 
 **Planned / ideas**
 
-- [ ] **Stage 3 visuals** — real tile art via the image hook; richer decay overlays
-  / light animation (fire, weeds).
+- [ ] **Stage 3 visuals** — real tile art for the hex map (e.g. a per-tile image
+  layer); richer decay overlays / light animation (fire, weeds).
 - [ ] **Rubble tiles** so a fully-decayed (0-building) district still shows on the map
   instead of disappearing.
 - [ ] **Replace placeholder content** — swap the placeholder districts/boroughs/habits
@@ -60,22 +65,26 @@ Fully working personal tool. Detailed design docs and implementation plans live 
 - **Hex City Map (Map tab)** — a unified hex-tile view of the city, derived from the
   view model (`src/engine/cityscape.ts`, pure). Each hex is a building, districts are
   neighborhood patches, color shows condition, features/landmarks are marked, and a
-  hover tooltip gives detail. Tiles can reference images via `src/data/tiles.ts` +
-  `public/tiles/` (drop in art — e.g. Midjourney — to replace colored hexes,
-  incrementally and per kind/condition/district). SVG, no new dependency.
-- **Eras + Life page** — a city-level `profile` (birthday + lifespan) drives an
+  hover tooltip gives detail. SVG, no new dependency.
+- **Eras + Life page** — a city-level `profile` (name + birthday + lifespan) drives an
   **Era** (Age-of-Empires-flavored life stage from `src/data/eras.ts`, derived from
-  age) shown as a banner. A second **Life** tab renders life as a grid of weeks
+  age) shown as a banner. A **Life** tab renders life as a grid of weeks
   (52/row, 5-year gaps; grey = lived, green = now, white = future) with labeled era
   bands. Each box has a date tooltip (its week's Sunday); the first box of each row
-  is ringed as the birthday week. Users can add **milestones** (wedding, a child's
-  birthday, a move…) that highlight their week in violet. Pure math in
+  is ringed as the birthday week. **Milestones** (wedding, a child's birthday, a
+  move…) highlight their week in violet. The Life tab is read-only; birthday,
+  lifespan, and milestones are edited on the Profile tab. Pure math in
   `src/engine/lifeline.ts`.
-- **UI** (`src/ui/`) — React "spreadsheet city": district cards (health, maturity,
-  feature badges, uncapped neighborhood chips, borough sub-blocks, landmarks), a
-  daily check-in, a **habit catalog** (create/attach/remove with cooldown), a
-  landmark builder that attaches habits from the catalog, and the City/Life tabs. A
-  temporary `DevPanel` time-travels days for tuning (clearly marked; remove before release).
+- **Profile** (`src/ui/ProfilePage.tsx`) — the single authoring surface: identity
+  (name, birthday, lifespan), districts and boroughs (add/rename), the habit catalog
+  (create/rename/reweight/remove with cooldown), the landmark builder + manager
+  (create/rename/remove — a removed landmark's habits re-home to its parent area), and
+  milestones. All other tabs only display what's set here.
+- **UI** (`src/ui/`) — React "spreadsheet city": read-only district cards (health,
+  maturity, feature badges, uncapped neighborhood chips, borough sub-blocks,
+  landmarks) plus the daily **check-in** on the City tab, the hex **Map**, the
+  read-only **Life** grid, and the **Profile** authoring tab. A temporary `DevPanel`
+  time-travels days for tuning (clearly marked; remove before release).
 
 ## Run it
 

@@ -1,8 +1,13 @@
 import type { CityState } from '../engine/types.ts';
 import { applyMissedDay } from '../engine/engine.ts';
+import { createSeededCity } from '../engine/seed.ts';
+import { dayDiffISO, addDaysISO } from '../engine/dates.ts';
 import { CITY_VERSION, DEFAULT_PROFILE } from '../engine/settings.ts';
 
 const STORAGE_KEY = 'polis.city';
+// Day-resolution bookkeeping (owned here, kept separate from the city blob).
+const LAST_RESOLVED_KEY = 'polis.lastResolved';
+const LAST_CHECKIN_KEY = 'polis.lastCheckIn';
 
 export function saveCity(state: CityState): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -30,6 +35,10 @@ function migrate(obj: Record<string, unknown>): unknown {
   if (o.version === 3 && o.milestones == null) {
     o = { ...o, milestones: [], version: 4 };
   }
+  if (o.version === 4) {
+    const profile = (o.profile as Record<string, unknown> | undefined) ?? DEFAULT_PROFILE;
+    o = { ...o, profile: { name: '', ...profile }, version: 5 };
+  }
   return o;
 }
 
@@ -46,6 +55,45 @@ export function catchUpMissedDays(state: CityState, elapsedDays: number): CitySt
   let s = state;
   for (let i = 0; i < elapsedDays; i++) s = applyMissedDay(s);
   return s;
+}
+
+/**
+ * Load the saved city (or seed a fresh one) and resolve any whole days missed
+ * since the last resolution — entropy/missed-check-in for each, minus today
+ * (today is still open to check in). Persists both the advanced city and the
+ * resolution marker. The one entry point the UI needs at startup.
+ */
+export function loadResolvedCity(todayISO: string): CityState {
+  let s = loadCity() ?? createSeededCity();
+  const lastResolved = localStorage.getItem(LAST_RESOLVED_KEY);
+  if (lastResolved == null) {
+    localStorage.setItem(LAST_RESOLVED_KEY, todayISO);
+  } else {
+    const missed = Math.max(0, dayDiffISO(lastResolved, todayISO) - 1);
+    if (missed > 0) {
+      s = catchUpMissedDays(s, missed);
+      localStorage.setItem(LAST_RESOLVED_KEY, addDaysISO(todayISO, -1));
+      saveCity(s);
+    }
+  }
+  return s;
+}
+
+/** The day of the user's last check-in (YYYY-MM-DD), or null if never. */
+export function getLastCheckIn(): string | null {
+  return localStorage.getItem(LAST_CHECKIN_KEY);
+}
+
+/** Mark today as both checked-in and resolved. */
+export function recordCheckIn(todayISO: string): void {
+  localStorage.setItem(LAST_RESOLVED_KEY, todayISO);
+  localStorage.setItem(LAST_CHECKIN_KEY, todayISO);
+}
+
+/** Reset resolution bookkeeping for a fresh seed (no check-in yet, resolved today). */
+export function resetResolution(todayISO: string): void {
+  localStorage.removeItem(LAST_CHECKIN_KEY);
+  localStorage.setItem(LAST_RESOLVED_KEY, todayISO);
 }
 
 function parseCity(json: string): CityState {

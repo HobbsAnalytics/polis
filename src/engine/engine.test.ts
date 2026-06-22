@@ -5,6 +5,13 @@ import {
   applyMissedDay,
   addLandmark,
   addHabit,
+  updateHabit,
+  addDistrict,
+  renameDistrict,
+  addBorough,
+  renameBorough,
+  renameLandmark,
+  removeLandmark,
   requestHabitRemoval,
   cancelHabitRemoval,
   confirmHabitRemoval,
@@ -140,6 +147,64 @@ it('add and remove milestones', () => {
   s = removeMilestone(s, 'm1');
   expect(s.milestones).toHaveLength(1);
   expect(s.milestones[0].label).toBe('Moved');
+});
+
+it('updateHabit edits name and weight, floors weight at 1, leaves others', () => {
+  let s = createCity({ districts: [dist('d1')] });
+  s = addHabit(s, hab('h', 'good', { kind: 'district', id: 'd1' }, 2));
+  s = updateHabit(s, 'h', { name: 'Renamed', weight: 5 });
+  expect(s.habits[0].name).toBe('Renamed');
+  expect(s.habits[0].weight).toBe(5);
+  // weight floored at 1; name untouched when omitted
+  s = updateHabit(s, 'h', { weight: 0 });
+  expect(s.habits[0].weight).toBe(1);
+  expect(s.habits[0].name).toBe('Renamed');
+});
+
+it('addDistrict / renameDistrict add and edit name + description', () => {
+  let s = createCity();
+  const r = addDistrict(s, { name: 'Health', description: 'body' });
+  s = r.state;
+  expect(s.districts).toHaveLength(1);
+  expect(r.districtId).toBe('district-1');
+  s = renameDistrict(s, r.districtId, { name: 'Body' });
+  expect(s.districts[0].name).toBe('Body');
+  expect(s.districts[0].description).toBe('body'); // unchanged when omitted
+});
+
+it('addBorough / renameBorough add under a district and edit name', () => {
+  let s = createCity({ districts: [dist('d1')] });
+  const r = addBorough(s, { districtId: 'd1', name: 'Sleep' });
+  s = r.state;
+  expect(s.boroughs).toHaveLength(1);
+  expect(s.boroughs[0].districtId).toBe('d1');
+  s = renameBorough(s, r.boroughId, 'Rest');
+  expect(s.boroughs[0].name).toBe('Rest');
+});
+
+it('renameLandmark edits the name', () => {
+  let s = createCity({ districts: [dist('d1')] });
+  const r = addLandmark(s, { districtId: 'd1', name: 'Old' });
+  s = renameLandmark(r.state, r.landmarkId, 'New');
+  expect(s.landmarks[0].name).toBe('New');
+});
+
+it('removeLandmark deletes it and re-homes its habits to the parent', () => {
+  let s = createCity({ districts: [dist('d1')], boroughs: [{ id: 'b1', districtId: 'd1', name: 'B', healthDirect: 0.5 }] });
+  // landmark in a borough → habits re-home to the borough
+  const r = addLandmark(s, { districtId: 'd1', boroughId: 'b1', name: 'L', attachHabitIds: [] });
+  s = addHabit(r.state, hab('h', 'good', { kind: 'landmark', id: r.landmarkId }));
+  s = removeLandmark(s, r.landmarkId);
+  expect(s.landmarks).toHaveLength(0);
+  expect(s.habits[0].target).toEqual({ kind: 'borough', id: 'b1' });
+});
+
+it('removeLandmark re-homes to the district when there is no borough', () => {
+  let s = createCity({ districts: [dist('d1')] });
+  const r = addLandmark(s, { districtId: 'd1', name: 'L' });
+  s = addHabit(r.state, hab('h', 'good', { kind: 'landmark', id: r.landmarkId }));
+  s = removeLandmark(s, r.landmarkId);
+  expect(s.habits[0].target).toEqual({ kind: 'district', id: 'd1' });
 });
 
 it('removal cooldown: request, blocked confirm, cancel, allowed confirm', () => {

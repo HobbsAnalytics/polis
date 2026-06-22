@@ -1,8 +1,9 @@
 import type { Profile, Settings } from './types.ts';
 
-export const CITY_VERSION = 4;
+export const CITY_VERSION = 5;
 
 export const DEFAULT_PROFILE: Profile = {
+  name: '',
   birthDateISO: '1988-11-01',
   lifespanYears: 75,
 };

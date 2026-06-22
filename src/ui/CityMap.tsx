@@ -1,16 +1,10 @@
-import { useMemo, useState } from 'react';
-import type { CityViewModel, ConditionLabel } from '../engine/types.ts';
+import { useMemo } from 'react';
+import type { CityViewModel } from '../engine/types.ts';
+import { CONDITIONS, conditionColor } from '../engine/viewModel.ts';
 import { buildCityscape } from '../engine/cityscape.ts';
 import type { PlacedTile } from '../engine/cityscape.ts';
-import { tileImage } from '../data/tiles.ts';
+import { useTooltip } from './useTooltip.tsx';
 
-const CONDITION_FILL: Record<ConditionLabel, string> = {
-  pristine: '#10b981',
-  worn: '#84cc16',
-  crumbling: '#f59e0b',
-  'on fire': '#ea580c',
-  ruin: '#78716c',
-};
 const FEATURE_FILL = '#eab308';
 const DISTRICT_COLORS = ['#3b82f6', '#a855f7', '#14b8a6', '#ef4444', '#f59e0b', '#8b5cf6', '#0ea5e9', '#db2777'];
 
@@ -32,14 +26,8 @@ function tileInfo(t: PlacedTile): string {
   return `${t.districtName} · neighborhood · ${t.conditionLabel}`;
 }
 
-interface Tip {
-  text: string;
-  x: number;
-  y: number;
-}
-
 export function CityMap({ vm }: { vm: CityViewModel }) {
-  const [tip, setTip] = useState<Tip | null>(null);
+  const { handlers, tooltip } = useTooltip('[data-info]', 260);
 
   const svg = useMemo(() => {
     const scape = buildCityscape(vm);
@@ -65,19 +53,8 @@ export function CityMap({ vm }: { vm: CityViewModel }) {
         width="100%"
         role="img"
         aria-label="Hex city map"
-        onMouseMove={(e) => {
-          const el = (e.target as Element).closest('[data-info]');
-          const info = el?.getAttribute('data-info');
-          setTip(info ? { text: info, x: e.clientX, y: e.clientY } : null);
-        }}
-        onMouseLeave={() => setTip(null)}
+        {...handlers}
       >
-        <defs>
-          <clipPath id="hexclip">
-            <polygon points={points} />
-          </clipPath>
-        </defs>
-
         {labels.map((l) => (
           <text key={l.id} x={l.cx} y={l.y} textAnchor="middle" fontSize={s * 1.1} fontWeight="700" fill={l.color}>
             {l.name}
@@ -85,35 +62,22 @@ export function CityMap({ vm }: { vm: CityViewModel }) {
         ))}
 
         {scape.tiles.map((t) => {
-          const img = tileImage({ kind: t.kind, conditionLabel: t.conditionLabel, districtId: t.districtId });
-          const fill = t.kind === 'feature' ? FEATURE_FILL : CONDITION_FILL[t.conditionLabel ?? 'ruin'];
+          const fill = t.kind === 'feature' ? FEATURE_FILL : conditionColor(t.conditionLabel ?? 'ruin');
           const stroke = colorOf(t.districtId);
           return (
             <g key={t.key} transform={`translate(${t.x.toFixed(2)},${t.y.toFixed(2)})`} data-info={tileInfo(t)}>
-              {img ? (
-                <image
-                  href={img}
-                  x={-s}
-                  y={-s}
-                  width={2 * s}
-                  height={2 * s}
-                  clipPath="url(#hexclip)"
-                  preserveAspectRatio="xMidYMid slice"
-                />
-              ) : (
-                <polygon points={points} fill={fill} stroke={stroke} strokeWidth={t.kind === 'landmark' ? 2 : 0.5} />
-              )}
+              <polygon points={points} fill={fill} stroke={stroke} strokeWidth={t.kind === 'landmark' ? 2 : 0.5} />
               {t.kind === 'feature' && (
                 <text textAnchor="middle" dominantBaseline="central" fontSize={s}>
                   {t.emoji}
                 </text>
               )}
-              {t.kind === 'landmark' && !img && (
+              {t.kind === 'landmark' && (
                 <text textAnchor="middle" dominantBaseline="central" fontSize={s * 0.9} fill="#fff">
                   ★
                 </text>
               )}
-              {t.kind === 'generic' && t.conditionLabel === 'on fire' && !img && (
+              {t.kind === 'generic' && t.conditionLabel === 'on fire' && (
                 <text textAnchor="middle" dominantBaseline="central" fontSize={s * 0.8}>
                   🔥
                 </text>
@@ -130,15 +94,14 @@ export function CityMap({ vm }: { vm: CityViewModel }) {
       <h2>City map</h2>
       <p className="muted">
         Each hex is a building; districts are neighborhoods. Color shows condition — hover any tile
-        for detail. Drop art in <code>public/tiles/</code> (see <code>src/data/tiles.ts</code>) to
-        replace hexes with images.
+        for detail.
       </p>
 
       <div className="legend">
-        {(Object.keys(CONDITION_FILL) as ConditionLabel[]).map((c) => (
-          <span key={c} className="legend-item">
-            <span className="legend-swatch" style={{ background: CONDITION_FILL[c] }} />
-            {c}
+        {CONDITIONS.map((d) => (
+          <span key={d.label} className="legend-item">
+            <span className="legend-swatch" style={{ background: d.color }} />
+            {d.label}
           </span>
         ))}
         <span className="legend-item">
@@ -150,11 +113,7 @@ export function CityMap({ vm }: { vm: CityViewModel }) {
 
       <div className="citymap">{svg}</div>
 
-      {tip && (
-        <div className="week-tip" style={{ left: Math.min(tip.x + 14, window.innerWidth - 260), top: tip.y + 14 }}>
-          {tip.text}
-        </div>
-      )}
+      {tooltip}
     </div>
   );
 }

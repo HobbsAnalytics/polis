@@ -73,6 +73,7 @@ export interface Settings {
 }
 
 export interface Profile {
+  name: string;
   birthDateISO: string;
   lifespanYears: number;
 }

@@ -3,7 +3,14 @@ import type { CityState } from '../engine/types.ts';
 import type { Profile } from '../engine/types.ts';
 import {
   addHabit,
+  updateHabit,
   addLandmark,
+  renameLandmark,
+  removeLandmark,
+  addDistrict,
+  renameDistrict,
+  addBorough,
+  renameBorough,
   applyCheckIn,
   applyMissedDay,
   requestHabitRemoval,
@@ -15,33 +22,28 @@ import {
 } from '../engine/engine.ts';
 import { buildCityViewModel } from '../engine/viewModel.ts';
 import { buildLifeline } from '../engine/lifeline.ts';
+import { todayISO } from '../engine/dates.ts';
 import { createSeededCity } from '../engine/seed.ts';
 import { LIFE_ERAS } from '../data/eras.ts';
-import { saveCity, loadCity, exportCity, importCity, catchUpMissedDays } from '../persistence/storage.ts';
+import {
+  saveCity,
+  exportCity,
+  importCity,
+  loadResolvedCity,
+  getLastCheckIn,
+  recordCheckIn,
+  resetResolution,
+} from '../persistence/storage.ts';
 import { CityView } from './CityView.tsx';
 import { CheckIn } from './CheckIn.tsx';
-import { NewLandmark } from './NewLandmark.tsx';
-import { HabitCatalog } from './HabitCatalog.tsx';
 import type { NewHabitFields } from './HabitCatalog.tsx';
 import { LifePage } from './LifePage.tsx';
 import { CityMap } from './CityMap.tsx';
+import { ProfilePage } from './ProfilePage.tsx';
 import { DevPanel } from './DevPanel.tsx';
 import type { AdvanceMode } from './DevPanel.tsx';
 
-type Page = 'city' | 'map' | 'life';
-
-const LAST_RESOLVED = 'polis.lastResolved';
-const LAST_CHECKIN = 'polis.lastCheckIn';
-
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-function dayDiff(aISO: string, bISO: string): number {
-  return Math.round((Date.parse(bISO) - Date.parse(aISO)) / 86_400_000);
-}
-function addDays(iso: string, n: number): string {
-  return new Date(Date.parse(iso) + n * 86_400_000).toISOString().slice(0, 10);
-}
+type Page = 'city' | 'map' | 'life' | 'profile';
 
 export function App() {
   const [city, setCity] = useState<CityState | null>(null);
@@ -52,23 +54,8 @@ export function App() {
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
-
-    let s = loadCity() ?? createSeededCity();
-    const today = todayStr();
-    const lastResolved = localStorage.getItem(LAST_RESOLVED);
-
-    if (lastResolved == null) {
-      localStorage.setItem(LAST_RESOLVED, today);
-    } else {
-      const missed = Math.max(0, dayDiff(lastResolved, today) - 1);
-      if (missed > 0) {
-        s = catchUpMissedDays(s, missed);
-        localStorage.setItem(LAST_RESOLVED, addDays(today, -1));
-        saveCity(s);
-      }
-    }
-    setCity(s);
-    setLastCheckIn(localStorage.getItem(LAST_CHECKIN));
+    setCity(loadResolvedCity(todayISO()));
+    setLastCheckIn(getLastCheckIn());
   }, []);
 
   function update(next: CityState) {
@@ -79,9 +66,8 @@ export function App() {
   function handleCheckIn(completedHabitIds: string[], loggedBadHabitIds: string[]) {
     if (!city) return;
     const next = applyCheckIn(city, { completedHabitIds, loggedBadHabitIds });
-    const today = todayStr();
-    localStorage.setItem(LAST_RESOLVED, today);
-    localStorage.setItem(LAST_CHECKIN, today);
+    const today = todayISO();
+    recordCheckIn(today);
     setLastCheckIn(today);
     update(next);
   }
@@ -95,9 +81,13 @@ export function App() {
         kind: fields.kind,
         weight: fields.weight,
         target: fields.target,
-        createdAtISO: todayStr(),
+        createdAtISO: todayISO(),
       }),
     );
+  }
+
+  function handleUpdateHabit(id: string, fields: { name?: string; weight?: number }) {
+    if (city) update(updateHabit(city, id, fields));
   }
 
   function handleCreateLandmark(
@@ -108,6 +98,26 @@ export function App() {
   ) {
     if (!city) return;
     update(addLandmark(city, { districtId, boroughId, name, attachHabitIds }).state);
+  }
+
+  function handleRenameLandmark(id: string, name: string) {
+    if (city) update(renameLandmark(city, id, name));
+  }
+  function handleRemoveLandmark(id: string) {
+    if (city) update(removeLandmark(city, id));
+  }
+
+  function handleAddDistrict(name: string, description: string) {
+    if (city) update(addDistrict(city, { name, description }).state);
+  }
+  function handleRenameDistrict(id: string, fields: { name?: string; description?: string }) {
+    if (city) update(renameDistrict(city, id, fields));
+  }
+  function handleAddBorough(districtId: string, name: string) {
+    if (city) update(addBorough(city, { districtId, name }).state);
+  }
+  function handleRenameBorough(id: string, name: string) {
+    if (city) update(renameBorough(city, id, name));
   }
 
   function handleSetProfile(profile: Profile) {
@@ -122,13 +132,13 @@ export function App() {
   }
 
   function handleRequestRemoval(id: string) {
-    if (city) update(requestHabitRemoval(city, id, todayStr()));
+    if (city) update(requestHabitRemoval(city, id, todayISO()));
   }
   function handleCancelRemoval(id: string) {
     if (city) update(cancelHabitRemoval(city, id));
   }
   function handleConfirmRemoval(id: string) {
-    if (city) update(confirmHabitRemoval(city, id, todayStr()));
+    if (city) update(confirmHabitRemoval(city, id, todayISO()));
   }
 
   // --- TEMPORARY: time-travel debug controls (remove before final release) ---
@@ -146,8 +156,7 @@ export function App() {
   }
   function handleReset() {
     const s = createSeededCity();
-    localStorage.removeItem(LAST_CHECKIN);
-    localStorage.setItem(LAST_RESOLVED, todayStr());
+    resetResolution(todayISO());
     setLastCheckIn(null);
     update(s);
   }
@@ -177,16 +186,18 @@ export function App() {
   }
 
   const vm = buildCityViewModel(city);
-  const lifeline = buildLifeline(city.profile, todayStr(), LIFE_ERAS);
+  const lifeline = buildLifeline(city.profile, todayISO(), LIFE_ERAS);
   const era = LIFE_ERAS.find((e) => e.id === lifeline.currentEraId);
-  const canCheckIn = lastCheckIn !== todayStr();
+  const canCheckIn = lastCheckIn !== todayISO();
 
   return (
     <div className="container">
       <header className="header">
         <div>
           <h1>Polis</h1>
-          <p className="subtitle">Your city, your self · day {vm.day}</p>
+          <p className="subtitle">
+            {city.profile.name ? `${city.profile.name}'s city` : 'Your city, your self'} · day {vm.day}
+          </p>
         </div>
         <div className="toolbar">
           <div className="tabs">
@@ -198,6 +209,9 @@ export function App() {
             </button>
             <button className={`tab ${page === 'life' ? 'tab-on' : ''}`} onClick={() => setPage('life')}>
               Life
+            </button>
+            <button className={`tab ${page === 'profile' ? 'tab-on' : ''}`} onClick={() => setPage('profile')}>
+              Profile
             </button>
           </div>
           <button onClick={handleExport} className="btn">
@@ -233,36 +247,30 @@ export function App() {
         <>
           <CheckIn habits={city.habits} canCheckIn={canCheckIn} onComplete={handleCheckIn} />
           <CityView vm={vm} />
-          <div style={{ height: '1.5rem' }} />
-          <HabitCatalog
-            habits={city.habits}
-            districts={city.districts}
-            boroughs={city.boroughs}
-            landmarks={city.landmarks}
-            today={todayStr()}
-            cooldownDays={city.settings.removalCooldownDays}
-            onCreateHabit={handleCreateHabit}
-            onRequestRemoval={handleRequestRemoval}
-            onCancelRemoval={handleCancelRemoval}
-            onConfirmRemoval={handleConfirmRemoval}
-          />
-          <NewLandmark
-            districts={city.districts.map((d) => ({ id: d.id, name: d.name }))}
-            boroughs={city.boroughs}
-            habits={city.habits}
-            onCreate={handleCreateLandmark}
-          />
           <DevPanel onAdvance={handleAdvance} onReset={handleReset} />
         </>
       )}
       {page === 'map' && <CityMap vm={vm} />}
       {page === 'life' && (
-        <LifePage
-          vm={lifeline}
-          profile={city.profile}
-          eras={LIFE_ERAS}
-          milestones={city.milestones}
+        <LifePage vm={lifeline} profile={city.profile} eras={LIFE_ERAS} milestones={city.milestones} />
+      )}
+      {page === 'profile' && (
+        <ProfilePage
+          city={city}
+          today={todayISO()}
           onSetProfile={handleSetProfile}
+          onCreateHabit={handleCreateHabit}
+          onUpdateHabit={handleUpdateHabit}
+          onRequestRemoval={handleRequestRemoval}
+          onCancelRemoval={handleCancelRemoval}
+          onConfirmRemoval={handleConfirmRemoval}
+          onCreateLandmark={handleCreateLandmark}
+          onRenameLandmark={handleRenameLandmark}
+          onRemoveLandmark={handleRemoveLandmark}
+          onAddDistrict={handleAddDistrict}
+          onRenameDistrict={handleRenameDistrict}
+          onAddBorough={handleAddBorough}
+          onRenameBorough={handleRenameBorough}
           onAddMilestone={handleAddMilestone}
           onRemoveMilestone={handleRemoveMilestone}
         />

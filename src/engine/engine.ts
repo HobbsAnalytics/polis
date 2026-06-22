@@ -10,16 +10,12 @@ import type {
 } from './types.ts';
 import { CITY_VERSION, DEFAULT_PROFILE, DEFAULT_SETTINGS, FEATURES } from './settings.ts';
 import { districtHealth, habitsTargeting } from './rollup.ts';
+import { dayDiffISO } from './dates.ts';
 
 export function clamp01(n: number): number {
   if (n < 0) return 0;
   if (n > 1) return 1;
   return n;
-}
-
-/** Whole calendar days from aISO to bISO. Pure (parses fixed date strings). */
-export function dayDiffISO(aISO: string, bISO: string): number {
-  return Math.round((Date.parse(bISO) - Date.parse(aISO)) / 86_400_000);
 }
 
 export interface CreateCityOpts {
@@ -160,6 +156,80 @@ export function addHabit(state: CityState, habit: Habit): CityState {
   return { ...state, habits: [...state.habits, habit] };
 }
 
+/** Edit a habit's name and/or weight (weight floored at 1). Other fields untouched. */
+export function updateHabit(
+  state: CityState,
+  habitId: string,
+  fields: { name?: string; weight?: number },
+): CityState {
+  return {
+    ...state,
+    habits: state.habits.map((h) =>
+      h.id === habitId
+        ? {
+            ...h,
+            name: fields.name ?? h.name,
+            weight: fields.weight != null ? Math.max(1, fields.weight) : h.weight,
+          }
+        : h,
+    ),
+  };
+}
+
+// ---- District / Borough authoring (add + rename only; no removal) ----
+
+export function addDistrict(
+  state: CityState,
+  opts: { name: string; description?: string },
+): { state: CityState; districtId: string } {
+  const districtId = `district-${state.districts.length + 1}`;
+  const district: District = {
+    id: districtId,
+    name: opts.name,
+    description: opts.description ?? '',
+    healthDirect: 0.5,
+    maturity: 0,
+    features: [],
+  };
+  return { state: { ...state, districts: [...state.districts, district] }, districtId };
+}
+
+export function renameDistrict(
+  state: CityState,
+  id: string,
+  fields: { name?: string; description?: string },
+): CityState {
+  return {
+    ...state,
+    districts: state.districts.map((d) =>
+      d.id === id
+        ? { ...d, name: fields.name ?? d.name, description: fields.description ?? d.description }
+        : d,
+    ),
+  };
+}
+
+export function addBorough(
+  state: CityState,
+  opts: { districtId: string; name: string },
+): { state: CityState; boroughId: string } {
+  const boroughId = `borough-${state.boroughs.length + 1}`;
+  const borough: Borough = {
+    id: boroughId,
+    districtId: opts.districtId,
+    name: opts.name,
+    healthDirect: 0.5,
+  };
+  return { state: { ...state, boroughs: [...state.boroughs, borough] }, boroughId };
+}
+
+export function renameBorough(state: CityState, id: string, name: string): CityState {
+  return {
+    ...state,
+    boroughs: state.boroughs.map((b) => (b.id === id ? { ...b, name } : b)),
+  };
+}
+
 export function setProfile(state: CityState, profile: Profile): CityState {
   return { ...state, profile };
 }
@@ -192,6 +262,33 @@ export function addLandmark(
     attach.has(h.id) ? { ...h, target: { kind: 'landmark' as const, id: landmarkId } } : h,
   );
   return { state: { ...state, habits, landmarks: [...state.landmarks, landmark] }, landmarkId };
+}
+
+export function renameLandmark(state: CityState, id: string, name: string): CityState {
+  return {
+    ...state,
+    landmarks: state.landmarks.map((lm) => (lm.id === id ? { ...lm, name } : lm)),
+  };
+}
+
+/**
+ * Remove a landmark, re-homing any habits attached to it onto its parent
+ * container (its borough if it had one, else its district) so no habit is
+ * orphaned to a dead target.
+ */
+export function removeLandmark(state: CityState, id: string): CityState {
+  const lm = state.landmarks.find((l) => l.id === id);
+  if (!lm) return state;
+  const target = lm.boroughId
+    ? { kind: 'borough' as const, id: lm.boroughId }
+    : { kind: 'district' as const, id: lm.districtId };
+  return {
+    ...state,
+    landmarks: state.landmarks.filter((l) => l.id !== id),
+    habits: state.habits.map((h) =>
+      h.target.kind === 'landmark' && h.target.id === id ? { ...h, target } : h,
+    ),
+  };
 }
 
 // ---- Removal cooldown (real calendar days; day math passed in from the UI) ----

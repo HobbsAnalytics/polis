@@ -1,9 +1,9 @@
 // Pure life-in-weeks math. No wall clock: today is passed in.
 import type { Profile } from './types.ts';
 import type { EraDef } from '../data/eras.ts';
+import { MS_PER_DAY, MS_PER_WEEK } from './dates.ts';
 
 const WEEKS_PER_YEAR = 52;
-const MS_PER_WEEK = 7 * 86_400_000;
 
 export function weeksLived(birthDateISO: string, todayISO: string): number {
   const ms = Date.parse(todayISO) - Date.parse(birthDateISO);
@@ -19,7 +19,7 @@ export function ageYears(weeks: number): number {
 export function weekSundayISO(birthDateISO: string, index: number): string {
   const start = Date.parse(birthDateISO) + index * MS_PER_WEEK;
   const dow = new Date(start).getUTCDay(); // 0 = Sunday
-  const sunday = start + ((7 - dow) % 7) * 86_400_000;
+  const sunday = start + ((7 - dow) % 7) * MS_PER_DAY;
   return new Date(sunday).toISOString().slice(0, 10);
 }
 
