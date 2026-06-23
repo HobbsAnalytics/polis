@@ -1,7 +1,25 @@
 import { it, expect } from '../testkit.ts';
-import { weeksLived, ageYears, currentEra, buildLifeline, weekSundayISO } from './lifeline.ts';
+import {
+  weeksLived,
+  ageYears,
+  currentEra,
+  buildLifeline,
+  weekSundayISO,
+  weeklyHealthChange,
+  weekTrend,
+} from './lifeline.ts';
 import { LIFE_ERAS } from '../data/eras.ts';
-import type { Profile } from './types.ts';
+import type { DayLog, Profile } from './types.ts';
+
+const log = (dateISO: string, netHealthChange: number): DayLog => ({
+  day: 0,
+  dateISO,
+  checkedIn: true,
+  completedHabitIds: [],
+  loggedBadHabitIds: [],
+  netHealthChange,
+  snapshot: { neighborhoods: [], landmarks: [] },
+});
 
 it('weeksLived counts whole weeks since birth (clamped at 0)', () => {
   expect(weeksLived('2000-01-01', '2000-01-15')).toBe(2); // 14 days
@@ -12,6 +30,32 @@ it('ageYears is weeks / 52 floored', () => {
   expect(ageYears(104)).toBe(2);
   expect(ageYears(103)).toBe(1);
 });
+
+it('weeklyHealthChange sums each day into its birthday-anchored week; weekTrend bands it', () => {
+  const birth = '2000-01-01';
+  // Two days in the same first week, one in a later week. Dateless logs are ignored.
+  const m = weeklyHealthChange(
+    [log('2000-01-02', 0.2), log('2000-01-03', -0.05), log('2000-02-01', -0.3), log('', 99)],
+    birth,
+  );
+  expect(Math.abs((m.get(0) ?? 0) - 0.15) < 1e-9).toBe(true); // 0.2 - 0.05
+  expect(weekTrend(m.get(0))).toBe('up');
+  expect(weekTrend(m.get(weekIndexFor(birth, '2000-02-01')))).toBe('down');
+  // No entry for an untouched week → 'none'
+  expect(weekTrend(m.get(500))).toBe('none');
+});
+
+it('weekTrend thresholds: flat band straddles zero', () => {
+  expect(weekTrend(0.005)).toBe('flat');
+  expect(weekTrend(-0.005)).toBe('flat');
+  expect(weekTrend(0.05)).toBe('slight-up');
+  expect(weekTrend(-0.05)).toBe('slight-down');
+});
+
+// local helper mirrors dates.weekIndex without importing it into the test surface
+function weekIndexFor(birthISO: string, dateISO: string): number {
+  return Math.floor((Date.parse(dateISO) - Date.parse(birthISO)) / (7 * 86_400_000));
+}
 
 it('weekSundayISO returns the Sunday within each birthday-anchored week', () => {
   // 2000-01-02 is a Sunday → week 0 is itself; week 1 is the next Sunday.

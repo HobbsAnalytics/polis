@@ -256,7 +256,7 @@ export function App() {
       )}
       {page === 'map' && <CityMap vm={vm} />}
       {page === 'life' && (
-        <LifePage vm={lifeline} profile={city.profile} eras={LIFE_ERAS} milestones={city.milestones} />
+        <LifePage vm={lifeline} profile={city.profile} eras={LIFE_ERAS} milestones={city.milestones} log={city.log} />
       )}
       {page === 'profile' && (
         <ProfilePage

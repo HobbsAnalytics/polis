@@ -380,6 +380,28 @@ body {
   background: #fff;
   border-color: var(--stone-200);
 }
+/* A lived week, tinted by the city's net health change that week (audit log).
+   Placed after lived/current so it wins, before milestone so milestones keep purple. */
+.life-trend-up {
+  background: var(--pristine);
+  border-color: var(--pristine);
+}
+.life-trend-slight-up {
+  background: var(--worn);
+  border-color: var(--worn);
+}
+.life-trend-flat {
+  background: var(--stone-400);
+  border-color: var(--stone-400);
+}
+.life-trend-slight-down {
+  background: var(--crumbling);
+  border-color: var(--crumbling);
+}
+.life-trend-down {
+  background: var(--onfire);
+  border-color: var(--onfire);
+}
 /* Left-most box of each row = the week of your birthday (start of a new age). */
 .life-birthday {
   position: relative;
