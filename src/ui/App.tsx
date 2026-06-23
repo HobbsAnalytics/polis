@@ -41,10 +41,12 @@ import type { NewHabitFields } from './HabitCatalog.tsx';
 import { LifePage } from './LifePage.tsx';
 import { CityMap } from './CityMap.tsx';
 import { ProfilePage } from './ProfilePage.tsx';
+import { HistoryPage } from './HistoryPage.tsx';
 import { DevPanel } from './DevPanel.tsx';
 import type { AdvanceMode } from './DevPanel.tsx';
+import { addDaysISO } from '../engine/dates.ts';
 
-type Page = 'city' | 'map' | 'life' | 'profile';
+type Page = 'city' | 'map' | 'life' | 'history' | 'profile';
 
 export function App() {
   const [city, setCity] = useState<CityState | null>(null);
@@ -148,10 +150,13 @@ export function App() {
     const goodIds = city.habits.filter((h) => h.kind === 'good').map((h) => h.id);
     const badIds = city.habits.filter((h) => h.kind === 'bad').map((h) => h.id);
     let s = city;
+    // Date the simulated days so they land in real (recent) weeks — lets the
+    // activity log and Life-tab week colors populate when fast-forwarding.
     for (let i = 0; i < times; i++) {
-      if (mode === 'good') s = applyCheckIn(s, { completedHabitIds: goodIds, loggedBadHabitIds: [] });
-      else if (mode === 'bad') s = applyCheckIn(s, { completedHabitIds: [], loggedBadHabitIds: badIds });
-      else s = applyMissedDay(s);
+      const dateISO = addDaysISO(todayISO(), -(times - 1 - i));
+      if (mode === 'good') s = applyCheckIn(s, { completedHabitIds: goodIds, loggedBadHabitIds: [], dateISO });
+      else if (mode === 'bad') s = applyCheckIn(s, { completedHabitIds: [], loggedBadHabitIds: badIds, dateISO });
+      else s = applyMissedDay(s, dateISO);
     }
     update(s);
   }
@@ -214,6 +219,9 @@ export function App() {
             <button className={`tab ${page === 'life' ? 'tab-on' : ''}`} onClick={() => setPage('life')}>
               Life
             </button>
+            <button className={`tab ${page === 'history' ? 'tab-on' : ''}`} onClick={() => setPage('history')}>
+              History
+            </button>
             <button className={`tab ${page === 'profile' ? 'tab-on' : ''}`} onClick={() => setPage('profile')}>
               Profile
             </button>
@@ -258,6 +266,7 @@ export function App() {
       {page === 'life' && (
         <LifePage vm={lifeline} profile={city.profile} eras={LIFE_ERAS} milestones={city.milestones} log={city.log} />
       )}
+      {page === 'history' && <HistoryPage city={city} />}
       {page === 'profile' && (
         <ProfilePage
           city={city}
