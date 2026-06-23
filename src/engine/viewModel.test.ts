@@ -29,12 +29,20 @@ it('condition labels respect thresholds', () => {
   expect(conditionLabel(0.05)).toBe('ruin');
 });
 
-it('building count = live (health-scaled) + legacy (maturity), uncapped', () => {
-  // health 1, baseSpread 12 → 12 live; maturity 20 → 20 legacy → 32, exceeds old cap
-  const s = createCity({ districts: [dist('d1', 1, 20)] });
+it('each neighborhood renders as its own building, at its own condition', () => {
+  const s = createCity({
+    districts: [dist('d1', 0.5, 20)],
+    neighborhoods: [
+      { id: 'n1', districtId: 'd1', boroughId: null, health: 0.9, createdDay: 0 },
+      { id: 'n2', districtId: 'd1', boroughId: null, health: 0.2, createdDay: 0 },
+    ],
+  });
   s.districts[0].features = ['fountain'];
   const vm = buildCityViewModel(s);
-  expect(vm.districts[0].generic.length).toBe(12 + 20);
+  expect(vm.districts[0].generic.length).toBe(2);
+  const labels = vm.districts[0].generic.map((b) => b.label);
+  expect(labels).toContain('pristine'); // the 0.9 building
+  expect(labels).toContain('on fire'); // the 0.2 building — a different condition than its neighbor
   expect(vm.districts[0].maturity).toBe(20);
   expect(vm.districts[0].features.map((f) => f.id)).toContain('fountain');
 });

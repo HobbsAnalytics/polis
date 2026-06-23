@@ -1,6 +1,8 @@
 // Pure weighted health roll-up, shared by the engine (maturity) and the view
-// model (display). Lower levels roll up into the district, weighted by how many
-// habits/landmarks are associated with each contributor.
+// model (display). Buildings (neighborhoods) and landmarks are the leaves;
+// boroughs aggregate the leaves under them, and districts aggregate their direct
+// buildings, their boroughs, and their direct landmarks. `healthDirect` survives
+// only as a fallback for a container that has no leaves yet.
 import type { Borough, CityState, District, Habit, NodeKind } from './types.ts';
 
 export function habitsTargeting(habits: Habit[], kind: NodeKind, id: string): Habit[] {
@@ -24,26 +26,28 @@ export function landmarkWeight(state: CityState, landmarkId: string): number {
 }
 
 export function boroughHealth(state: CityState, borough: Borough): number {
-  const directHabits = habitsTargeting(state.habits, 'borough', borough.id);
-  const parts: Part[] = [{ value: borough.healthDirect, weight: directHabits.length }];
+  const parts: Part[] = [];
+  for (const n of state.neighborhoods.filter((x) => x.boroughId === borough.id)) {
+    parts.push({ value: n.health, weight: 1 });
+  }
   for (const lm of state.landmarks.filter((l) => l.boroughId === borough.id)) {
     parts.push({ value: lm.condition, weight: landmarkWeight(state, lm.id) });
   }
   return weightedAvg(parts, borough.healthDirect);
 }
 
-/** A borough's association weight: habits anywhere under it + its landmarks. */
+/** A borough's association weight in its district: the count of its buildings + landmarks. */
 export function boroughWeight(state: CityState, borough: Borough): number {
-  const landmarks = state.landmarks.filter((l) => l.boroughId === borough.id);
-  const habitCount =
-    habitsTargeting(state.habits, 'borough', borough.id).length +
-    landmarks.reduce((s, lm) => s + habitsTargeting(state.habits, 'landmark', lm.id).length, 0);
-  return habitCount + landmarks.length;
+  const neighborhoods = state.neighborhoods.filter((n) => n.boroughId === borough.id).length;
+  const landmarks = state.landmarks.filter((l) => l.boroughId === borough.id).length;
+  return Math.max(1, neighborhoods + landmarks);
 }
 
 export function districtHealth(state: CityState, district: District): number {
-  const directHabits = habitsTargeting(state.habits, 'district', district.id);
-  const parts: Part[] = [{ value: district.healthDirect, weight: directHabits.length }];
+  const parts: Part[] = [];
+  for (const n of state.neighborhoods.filter((x) => x.districtId === district.id && x.boroughId === null)) {
+    parts.push({ value: n.health, weight: 1 });
+  }
   for (const b of state.boroughs.filter((x) => x.districtId === district.id)) {
     parts.push({ value: boroughHealth(state, b), weight: boroughWeight(state, b) });
   }

@@ -13,6 +13,7 @@ import {
   renameBorough,
   applyCheckIn,
   applyMissedDay,
+  cityDay,
   requestHabitRemoval,
   cancelHabitRemoval,
   confirmHabitRemoval,
@@ -65,8 +66,8 @@ export function App() {
 
   function handleCheckIn(completedHabitIds: string[], loggedBadHabitIds: string[]) {
     if (!city) return;
-    const next = applyCheckIn(city, { completedHabitIds, loggedBadHabitIds });
     const today = todayISO();
+    const next = applyCheckIn(city, { completedHabitIds, loggedBadHabitIds, dateISO: today });
     recordCheckIn(today);
     setLastCheckIn(today);
     update(next);
@@ -121,7 +122,7 @@ export function App() {
   }
 
   function handleSetProfile(profile: Profile) {
-    if (city) update(setProfile(city, profile));
+    if (city) update(setProfile(city, profile, todayISO()));
   }
 
   function handleAddMilestone(label: string, dateISO: string) {
@@ -189,6 +190,8 @@ export function App() {
   const lifeline = buildLifeline(city.profile, todayISO(), LIFE_ERAS);
   const era = LIFE_ERAS.find((e) => e.id === lifeline.currentEraId);
   const canCheckIn = lastCheckIn !== todayISO();
+  const named = city.profile.name.trim() !== '';
+  const day = cityDay(city.profile, todayISO());
 
   return (
     <div className="container">
@@ -196,7 +199,8 @@ export function App() {
         <div>
           <h1>Polis</h1>
           <p className="subtitle">
-            {city.profile.name ? `${city.profile.name}'s city` : 'Your city, your self'} · day {vm.day}
+            {named ? `${city.profile.name}'s city` : 'Your city, your self'} ·{' '}
+            {named ? `day ${day}` : 'day 0 — name your city on the Profile tab to start the clock'}
           </p>
         </div>
         <div className="toolbar">

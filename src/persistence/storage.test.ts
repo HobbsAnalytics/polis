@@ -27,7 +27,7 @@ it('migrates a v2 save (no profile/milestones) up to current with defaults', () 
   const { profile: _p, milestones: _m, ...old } = s;
   saveCity({ ...old, version: 2 } as unknown as typeof s);
   const loaded = loadCity();
-  expect(loaded?.version).toBe(5);
+  expect(loaded?.version).toBe(6);
   expect(loaded?.profile.lifespanYears).toBe(75);
   expect(loaded?.profile.name).toBe('');
   expect(loaded?.milestones).toEqual([]);
@@ -38,7 +38,7 @@ it('migrates a v3 save (no milestones) up to current', () => {
   const { milestones: _m, ...old } = s;
   saveCity({ ...old, version: 3 } as unknown as typeof s);
   const loaded = loadCity();
-  expect(loaded?.version).toBe(5);
+  expect(loaded?.version).toBe(6);
   expect(loaded?.milestones).toEqual([]);
 });
 
@@ -47,7 +47,7 @@ it('migrates a v4 save (no profile.name) up to current with an empty name', () =
   const { name: _n, ...profileNoName } = s.profile;
   saveCity({ ...s, profile: profileNoName, version: 4 } as unknown as typeof s);
   const loaded = loadCity();
-  expect(loaded?.version).toBe(5);
+  expect(loaded?.version).toBe(6);
   expect(loaded?.profile.name).toBe('');
   expect(loaded?.profile.birthDateISO).toBe(s.profile.birthDateISO);
 });

@@ -1,15 +1,23 @@
 import type {
   Borough,
   CityState,
+  DaySnapshot,
   District,
   Habit,
   Landmark,
   Milestone,
+  Neighborhood,
   Profile,
   Settings,
 } from './types.ts';
 import { CITY_VERSION, DEFAULT_PROFILE, DEFAULT_SETTINGS, FEATURES } from './settings.ts';
 import { districtHealth, habitsTargeting } from './rollup.ts';
+import {
+  grownNeighborhoods,
+  neighborhoodsForBorough,
+  neighborhoodsForDistrict,
+  updateNeighborhood,
+} from './neighborhoods.ts';
 import { dayDiffISO } from './dates.ts';
 
 export function clamp01(n: number): number {
@@ -25,6 +33,7 @@ export interface CreateCityOpts {
   districts?: District[];
   boroughs?: Borough[];
   landmarks?: Landmark[];
+  neighborhoods?: Neighborhood[];
   habits?: Habit[];
 }
 
@@ -38,9 +47,37 @@ export function createCity(opts: CreateCityOpts = {}): CityState {
     districts: opts.districts ?? [],
     boroughs: opts.boroughs ?? [],
     landmarks: opts.landmarks ?? [],
+    neighborhoods: opts.neighborhoods ?? [],
     habits: opts.habits ?? [],
-    history: [],
+    log: [],
   };
+}
+
+/**
+ * The habit-driven change for one node on a given day, excluding entropy.
+ * Effects scale by habit weight. Shared by `updateScalar` (district/borough/
+ * landmark scalars) and the neighborhood update (which adds varied entropy).
+ */
+export function habitDelta(
+  habits: Habit[],
+  completed: Set<string>,
+  logged: Set<string>,
+  checkedIn: boolean,
+  s: Settings,
+): number {
+  let delta = 0;
+  for (const h of habits) {
+    if (h.kind === 'good') {
+      if (completed.has(h.id)) {
+        delta += s.goodHabitGain * h.weight;
+      } else {
+        delta -= (checkedIn ? s.missedHabitPenalty : s.missedCheckinPenalty) * h.weight;
+      }
+    } else if (logged.has(h.id)) {
+      delta -= s.badHabitPenalty * h.weight;
+    }
+  }
+  return delta;
 }
 
 /**
@@ -55,19 +92,7 @@ export function updateScalar(
   checkedIn: boolean,
   s: Settings,
 ): number {
-  let delta = -s.entropyPerDay;
-  for (const h of habits) {
-    if (h.kind === 'good') {
-      if (completed.has(h.id)) {
-        delta += s.goodHabitGain * h.weight;
-      } else {
-        delta -= (checkedIn ? s.missedHabitPenalty : s.missedCheckinPenalty) * h.weight;
-      }
-    } else if (logged.has(h.id)) {
-      delta -= s.badHabitPenalty * h.weight;
-    }
-  }
-  return clamp01(current + delta);
+  return clamp01(current + habitDelta(habits, completed, logged, checkedIn, s) - s.entropyPerDay);
 }
 
 function advanceLandmarkTier(lm: Landmark, s: Settings): Landmark {
@@ -98,6 +123,8 @@ interface DayInput {
   completedHabitIds: string[];
   loggedBadHabitIds: string[];
   checkedIn: boolean;
+  /** Calendar date this day represents, for the activity log. */
+  dateISO?: string;
 }
 
 function advanceDay(state: CityState, input: DayInput): CityState {
@@ -107,6 +134,17 @@ function advanceDay(state: CityState, input: DayInput): CityState {
 
   const upd = (current: number, kind: 'district' | 'borough' | 'landmark', id: string) =>
     updateScalar(current, habitsTargeting(state.habits, kind, id), completed, logged, input.checkedIn, s);
+  // habit-driven delta (no entropy) for a container, memoized — neighborhoods reuse it.
+  const deltaCache = new Map<string, number>();
+  const containerDelta = (kind: 'district' | 'borough', id: string) => {
+    const key = `${kind}:${id}`;
+    let d = deltaCache.get(key);
+    if (d === undefined) {
+      d = habitDelta(habitsTargeting(state.habits, kind, id), completed, logged, input.checkedIn, s);
+      deltaCache.set(key, d);
+    }
+    return d;
+  };
 
   const landmarks = state.landmarks.map((lm) =>
     advanceLandmarkTier({ ...lm, condition: upd(lm.condition, 'landmark', lm.id) }, s),
@@ -114,22 +152,27 @@ function advanceDay(state: CityState, input: DayInput): CityState {
   const boroughs = state.boroughs.map((b) => ({ ...b, healthDirect: upd(b.healthDirect, 'borough', b.id) }));
   const districtsHD = state.districts.map((d) => ({ ...d, healthDirect: upd(d.healthDirect, 'district', d.id) }));
 
+  // Each building drifts on its own: district habits spread to all its
+  // buildings; borough habits add on top for buildings inside that borough.
+  const neighborhoods = state.neighborhoods.map((n) => {
+    let delta = containerDelta('district', n.districtId);
+    if (n.boroughId) delta += containerDelta('borough', n.boroughId);
+    return { ...n, health: updateNeighborhood(n, delta, s) };
+  });
+
+  // Net change across the city's primary carriers — drives the Life week-box color.
+  const netHealthChange =
+    neighborhoods.reduce((acc, n, i) => acc + (n.health - state.neighborhoods[i].health), 0) +
+    landmarks.reduce((acc, lm, i) => acc + (lm.condition - state.landmarks[i].condition), 0);
+
   // Intermediate state so roll-up sees the updated scalars.
   const next: CityState = {
     ...state,
     day: state.day + 1,
     landmarks,
     boroughs,
+    neighborhoods,
     districts: districtsHD,
-    history: [
-      ...state.history,
-      {
-        day: state.day + 1,
-        checkedIn: input.checkedIn,
-        completedHabitIds: [...input.completedHabitIds],
-        loggedBadHabitIds: [...input.loggedBadHabitIds],
-      },
-    ],
   };
 
   next.districts = next.districts.map((d) => {
@@ -138,18 +181,51 @@ function advanceDay(state: CityState, input: DayInput): CityState {
     return { ...d, maturity, features: unlockFeatures(d.features, maturity) };
   });
 
+  // Legacy growth: matured districts accrue new (never-vanishing) buildings.
+  const grown = grownNeighborhoods(
+    next.districts,
+    next.neighborhoods,
+    (id) => next.districts.find((d) => d.id === id)?.healthDirect ?? 0.5,
+    next.day,
+  );
+  if (grown.length > 0) next.neighborhoods = [...next.neighborhoods, ...grown];
+
+  next.log = [
+    ...state.log,
+    {
+      day: next.day,
+      dateISO: input.dateISO ?? '',
+      checkedIn: input.checkedIn,
+      completedHabitIds: [...input.completedHabitIds],
+      loggedBadHabitIds: [...input.loggedBadHabitIds],
+      netHealthChange,
+      snapshot: snapshotOf(next),
+    },
+  ];
+
   return next;
+}
+
+function snapshotOf(state: CityState): DaySnapshot {
+  return {
+    neighborhoods: state.neighborhoods.map((n) => [n.id, round3(n.health)]),
+    landmarks: state.landmarks.map((lm) => [lm.id, round3(lm.condition)]),
+  };
+}
+
+function round3(n: number): number {
+  return Math.round(n * 1000) / 1000;
 }
 
 export function applyCheckIn(
   state: CityState,
-  input: { completedHabitIds: string[]; loggedBadHabitIds: string[] },
+  input: { completedHabitIds: string[]; loggedBadHabitIds: string[]; dateISO?: string },
 ): CityState {
   return advanceDay(state, { ...input, checkedIn: true });
 }
 
-export function applyMissedDay(state: CityState): CityState {
-  return advanceDay(state, { completedHabitIds: [], loggedBadHabitIds: [], checkedIn: false });
+export function applyMissedDay(state: CityState, dateISO?: string): CityState {
+  return advanceDay(state, { completedHabitIds: [], loggedBadHabitIds: [], checkedIn: false, dateISO });
 }
 
 export function addHabit(state: CityState, habit: Habit): CityState {
@@ -191,7 +267,15 @@ export function addDistrict(
     maturity: 0,
     features: [],
   };
-  return { state: { ...state, districts: [...state.districts, district] }, districtId };
+  const neighborhoods = neighborhoodsForDistrict(district, state.settings.baseSpread, state.day);
+  return {
+    state: {
+      ...state,
+      districts: [...state.districts, district],
+      neighborhoods: [...state.neighborhoods, ...neighborhoods],
+    },
+    districtId,
+  };
 }
 
 export function renameDistrict(
@@ -220,7 +304,15 @@ export function addBorough(
     name: opts.name,
     healthDirect: 0.5,
   };
-  return { state: { ...state, boroughs: [...state.boroughs, borough] }, boroughId };
+  const neighborhoods = neighborhoodsForBorough(borough, state.settings.baseSpread, state.day);
+  return {
+    state: {
+      ...state,
+      boroughs: [...state.boroughs, borough],
+      neighborhoods: [...state.neighborhoods, ...neighborhoods],
+    },
+    boroughId,
+  };
 }
 
 export function renameBorough(state: CityState, id: string, name: string): CityState {
@@ -230,8 +322,22 @@ export function renameBorough(state: CityState, id: string, name: string): CityS
   };
 }
 
-export function setProfile(state: CityState, profile: Profile): CityState {
-  return { ...state, profile };
+/**
+ * Update the profile. The first time a name is set, `todayISO` anchors the city's
+ * day counter (`startDateISO`) — the day you name your city is Day 1.
+ */
+export function setProfile(state: CityState, profile: Profile, todayISO?: string): CityState {
+  const anchored =
+    profile.name.trim() !== '' && !profile.startDateISO && todayISO
+      ? { ...profile, startDateISO: todayISO }
+      : profile;
+  return { ...state, profile: anchored };
+}
+
+/** Days since the city was named (Day 1 = the day you set your name). 0 until named. */
+export function cityDay(profile: Profile, todayISO: string): number {
+  if (!profile.startDateISO) return 0;
+  return Math.max(0, dayDiffISO(profile.startDateISO, todayISO)) + 1;
 }
 
 export function addMilestone(state: CityState, milestone: Milestone): CityState {

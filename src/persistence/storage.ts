@@ -1,8 +1,9 @@
-import type { CityState } from '../engine/types.ts';
+import type { Borough, CityState, DayLog, District } from '../engine/types.ts';
 import { applyMissedDay } from '../engine/engine.ts';
+import { seedNeighborhoods } from '../engine/neighborhoods.ts';
 import { createSeededCity } from '../engine/seed.ts';
 import { dayDiffISO, addDaysISO } from '../engine/dates.ts';
-import { CITY_VERSION, DEFAULT_PROFILE } from '../engine/settings.ts';
+import { CITY_VERSION, DEFAULT_PROFILE, DEFAULT_SETTINGS } from '../engine/settings.ts';
 
 const STORAGE_KEY = 'polis.city';
 // Day-resolution bookkeeping (owned here, kept separate from the city blob).
@@ -39,7 +40,43 @@ function migrate(obj: Record<string, unknown>): unknown {
     const profile = (o.profile as Record<string, unknown> | undefined) ?? DEFAULT_PROFILE;
     o = { ...o, profile: { name: '', ...profile }, version: 5 };
   }
+  if (o.version === 5) {
+    // v6: individual buildings, a calendar anchor, and a richer activity log.
+    const profile = (o.profile as Record<string, unknown> | undefined) ?? DEFAULT_PROFILE;
+    const baseSpread =
+      ((o.settings as Record<string, unknown> | undefined)?.baseSpread as number | undefined) ??
+      DEFAULT_SETTINGS.baseSpread;
+    const districts = (o.districts as District[] | undefined) ?? [];
+    const boroughs = (o.boroughs as Borough[] | undefined) ?? [];
+    // Anchor day to the original creation date if we can infer it, else leave unset.
+    const startDateISO =
+      typeof profile.startDateISO === 'string' && profile.startDateISO
+        ? profile.startDateISO
+        : '';
+    o = {
+      ...o,
+      profile: { ...DEFAULT_PROFILE, ...profile, startDateISO },
+      neighborhoods: o.neighborhoods ?? seedNeighborhoods(districts, boroughs, baseSpread),
+      log: migrateHistoryToLog(o.history),
+      version: 6,
+    };
+    delete (o as Record<string, unknown>).history;
+  }
   return o;
+}
+
+/** Old saves stored a thin per-day `history`; carry it forward into `log` shape. */
+function migrateHistoryToLog(history: unknown): DayLog[] {
+  if (!Array.isArray(history)) return [];
+  return history.map((h: Record<string, unknown>) => ({
+    day: (h.day as number) ?? 0,
+    dateISO: '',
+    checkedIn: (h.checkedIn as boolean) ?? false,
+    completedHabitIds: (h.completedHabitIds as string[]) ?? [],
+    loggedBadHabitIds: (h.loggedBadHabitIds as string[]) ?? [],
+    netHealthChange: 0,
+    snapshot: { neighborhoods: [], landmarks: [] },
+  }));
 }
 
 export function exportCity(state: CityState): string {
@@ -50,10 +87,16 @@ export function importCity(json: string): CityState {
   return parseCity(json);
 }
 
-/** Apply `elapsedDays` missed-day ticks (entropy + missed-checkin). 0 ⇒ unchanged. */
-export function catchUpMissedDays(state: CityState, elapsedDays: number): CityState {
+/**
+ * Apply `elapsedDays` missed-day ticks (entropy + missed-checkin). 0 ⇒ unchanged.
+ * `firstDateISO`, when given, is the calendar date of the first missed day so the
+ * activity log carries real dates.
+ */
+export function catchUpMissedDays(state: CityState, elapsedDays: number, firstDateISO?: string): CityState {
   let s = state;
-  for (let i = 0; i < elapsedDays; i++) s = applyMissedDay(s);
+  for (let i = 0; i < elapsedDays; i++) {
+    s = applyMissedDay(s, firstDateISO ? addDaysISO(firstDateISO, i) : undefined);
+  }
   return s;
 }
 
@@ -71,7 +114,7 @@ export function loadResolvedCity(todayISO: string): CityState {
   } else {
     const missed = Math.max(0, dayDiffISO(lastResolved, todayISO) - 1);
     if (missed > 0) {
-      s = catchUpMissedDays(s, missed);
+      s = catchUpMissedDays(s, missed, addDaysISO(lastResolved, 1));
       localStorage.setItem(LAST_RESOLVED_KEY, addDaysISO(todayISO, -1));
       saveCity(s);
     }
@@ -118,7 +161,8 @@ function isCityState(obj: unknown): obj is CityState {
     Array.isArray(c.districts) &&
     Array.isArray(c.boroughs) &&
     Array.isArray(c.landmarks) &&
+    Array.isArray(c.neighborhoods) &&
     Array.isArray(c.habits) &&
-    Array.isArray(c.history)
+    Array.isArray(c.log)
   );
 }

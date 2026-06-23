@@ -1,0 +1,128 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - heading "Polis" [level=1] [ref=e6]
+      - paragraph [ref=e7]: Your city, your self · day 0
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - button "City" [ref=e10] [cursor=pointer]
+        - button "Map" [ref=e11] [cursor=pointer]
+        - button "Life" [ref=e12] [cursor=pointer]
+        - button "Profile" [active] [ref=e13] [cursor=pointer]
+      - button "Export" [ref=e14] [cursor=pointer]
+      - generic [ref=e15] [cursor=pointer]: Import
+  - generic [ref=e16]:
+    - generic [ref=e17]: Age of Ascent
+    - generic [ref=e18]: Early family & career · age 37 · week 1,964 of 3,900
+  - generic [ref=e71]:
+    - generic [ref=e72]:
+      - heading "Profile" [level=2] [ref=e73]
+      - paragraph [ref=e74]: The one place to define your world — identity, districts, boroughs, habits, landmarks, and important dates. Every other page just reflects what you set here.
+    - generic [ref=e75]:
+      - heading "Identity" [level=2] [ref=e76]
+      - paragraph [ref=e77]: Who this city belongs to, and the lifespan that frames the Life page.
+      - generic [ref=e78]:
+        - generic [ref=e79]:
+          - text: Your name
+          - textbox "Your name" [ref=e80]:
+            - /placeholder: e.g. Joseph
+        - generic [ref=e81]:
+          - text: Date of birth
+          - textbox "Date of birth" [ref=e82]: 1988-11-01
+        - generic [ref=e83]:
+          - text: Lifespan (years)
+          - spinbutton "Lifespan (years)" [ref=e84]: "75"
+    - generic [ref=e85]:
+      - heading "Districts" [level=2] [ref=e86]
+      - paragraph [ref=e87]: Your wellbeing domains — each is a neighborhood on the map.
+      - generic [ref=e89]:
+        - textbox "District name" [ref=e90]: Home
+        - textbox "District description" [ref=e91]:
+          - /placeholder: short description
+      - generic [ref=e92]:
+        - generic [ref=e93]:
+          - text: New district
+          - textbox "New district" [ref=e94]:
+            - /placeholder: e.g. Health
+        - generic [ref=e95]:
+          - text: Description
+          - textbox "Description" [ref=e96]:
+            - /placeholder: optional
+      - button "Add district" [ref=e97] [cursor=pointer]
+    - generic [ref=e98]:
+      - heading "Boroughs" [level=2] [ref=e99]
+      - paragraph [ref=e100]: Optional sub-areas within a district.
+      - paragraph [ref=e102]: no boroughs yet
+      - generic [ref=e103]:
+        - generic [ref=e104]:
+          - text: District
+          - combobox "District" [ref=e105]:
+            - option "Home" [selected]
+        - generic [ref=e106]:
+          - text: New borough
+          - textbox "New borough" [ref=e107]:
+            - /placeholder: e.g. Sleep
+      - button "Add borough" [ref=e108] [cursor=pointer]
+    - generic [ref=e109]:
+      - heading "Habit catalog" [level=2] [ref=e110]
+      - paragraph [ref=e111]: Every habit lives here, attached to a district, borough, or landmark.
+      - generic [ref=e112]:
+        - generic [ref=e113]:
+          - text: Habit name
+          - textbox "Habit name" [ref=e114]:
+            - /placeholder: e.g. Didn't drink
+        - generic [ref=e115]:
+          - text: Kind
+          - combobox "Kind" [ref=e116]:
+            - option "good" [selected]
+            - option "bad"
+        - generic [ref=e117]:
+          - text: Weight
+          - spinbutton "Weight" [ref=e118]: "1"
+        - generic [ref=e119]:
+          - text: Attach to
+          - generic [ref=e120]:
+            - combobox "Attach to Home" [ref=e121]:
+              - option "district" [selected]
+              - option "borough"
+              - option "landmark"
+            - combobox [ref=e122]:
+              - option "Home" [selected]
+      - button "Add habit" [ref=e123] [cursor=pointer]
+      - generic [ref=e124]: All habits (0)
+    - generic [ref=e125]:
+      - heading "Raise a landmark" [level=2] [ref=e126]
+      - paragraph [ref=e127]: Place it, then attach habits from the catalog (at least one good habit).
+      - generic [ref=e128]:
+        - generic [ref=e129]:
+          - text: District
+          - combobox "District" [ref=e130]:
+            - option "Home" [selected]
+        - generic [ref=e131]:
+          - text: Borough (optional)
+          - combobox "Borough (optional)" [ref=e132]:
+            - option "— directly in district —" [selected]
+        - generic [ref=e133]:
+          - text: Landmark name
+          - textbox "Landmark name" [ref=e134]:
+            - /placeholder: e.g. Sobriety Cathedral
+      - generic [ref=e135]:
+        - generic [ref=e136]:
+          - generic [ref=e137]: Attach good habits
+          - paragraph [ref=e138]: create some in the catalog first
+        - generic [ref=e139]:
+          - generic [ref=e140]: Attach bad habits (optional)
+          - paragraph [ref=e141]: none yet
+      - button "Create landmark" [ref=e142] [cursor=pointer]
+    - generic [ref=e143]:
+      - heading "Important dates" [level=2] [ref=e144]
+      - paragraph [ref=e145]: Mark milestones — a wedding, a child's birthday, a new job, a move.
+      - generic [ref=e146]:
+        - generic [ref=e147]:
+          - text: Label
+          - textbox "Label" [ref=e148]:
+            - /placeholder: e.g. Wedding
+        - generic [ref=e149]:
+          - text: Date
+          - textbox "Date" [ref=e150]
+      - button "Add date" [ref=e151] [cursor=pointer]

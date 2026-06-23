@@ -51,11 +51,37 @@ export interface Landmark {
   createdDay: number;
 }
 
-export interface DayRecord {
+/**
+ * A single generic building. Each one carries its own health and decays/improves
+ * individually, so a district reads as a patchwork of conditions. Belongs to a
+ * borough when `boroughId` is set, otherwise directly to its district.
+ */
+export interface Neighborhood {
+  id: string;
+  districtId: string;
+  boroughId: string | null;
+  health: number; // 0..1, drifts individually
+  createdDay: number;
+}
+
+/**
+ * One day's activity + outcome. Appended once per advanced day. `netHealthChange`
+ * is the summed delta across every node that day (drives week-box color); the
+ * compact `snapshot` lets the History view re-render a past day read-only.
+ */
+export interface DayLog {
   day: number;
+  dateISO: string;
   checkedIn: boolean;
   completedHabitIds: string[];
   loggedBadHabitIds: string[];
+  netHealthChange: number;
+  snapshot: DaySnapshot;
+}
+
+export interface DaySnapshot {
+  neighborhoods: [string, number][]; // [id, health]
+  landmarks: [string, number][]; // [id, condition]
 }
 
 export interface Settings {
@@ -76,6 +102,8 @@ export interface Profile {
   name: string;
   birthDateISO: string;
   lifespanYears: number;
+  /** Set the first time `name` becomes non-empty; anchors the city's day counter. '' until then. */
+  startDateISO: string;
 }
 
 /** A user-defined important life date, highlighted on the Life-in-Weeks grid. */
@@ -94,8 +122,9 @@ export interface CityState {
   districts: District[];
   boroughs: Borough[];
   landmarks: Landmark[];
+  neighborhoods: Neighborhood[];
   habits: Habit[];
-  history: DayRecord[];
+  log: DayLog[];
 }
 
 // ---- View model (the renderer seam) ----
@@ -103,6 +132,7 @@ export interface CityState {
 export type ConditionLabel = 'pristine' | 'worn' | 'crumbling' | 'on fire' | 'ruin';
 
 export interface GenericBuildingVM {
+  id: string;
   condition: number;
   label: ConditionLabel;
 }
@@ -126,6 +156,7 @@ export interface BoroughVM {
   name: string;
   health: number;
   label: ConditionLabel;
+  generic: GenericBuildingVM[];
   landmarks: LandmarkVM[];
 }
 

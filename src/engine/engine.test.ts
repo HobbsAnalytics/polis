@@ -3,6 +3,8 @@ import {
   createCity,
   applyCheckIn,
   applyMissedDay,
+  setProfile,
+  cityDay,
   addLandmark,
   addHabit,
   updateHabit,
@@ -117,16 +119,36 @@ it('a thriving landmark rolls up to lift district health', () => {
 });
 
 it('roll-up is weighted: a bigger contributor dominates', () => {
-  let s = createCity({ districts: [dist('d1', 0.2)] });
-  // Two heavy district-direct habits keep direct weight high vs a single-habit landmark.
-  s = addHabit(s, hab('da', 'good', { kind: 'district', id: 'd1' }));
-  s = addHabit(s, hab('db', 'good', { kind: 'district', id: 'd1' }));
+  // Two low-health buildings (weight 1 each) outweigh a single pristine landmark.
+  let s = createCity({
+    districts: [dist('d1', 0.2)],
+    neighborhoods: [
+      { id: 'n1', districtId: 'd1', boroughId: null, health: 0.2, createdDay: 0 },
+      { id: 'n2', districtId: 'd1', boroughId: null, health: 0.2, createdDay: 0 },
+    ],
+  });
   const r = addLandmark(s, { districtId: 'd1', name: 'L', condition: 1 });
   s = addHabit(r.state, hab('lg', 'good', { kind: 'landmark', id: r.landmarkId }));
   const h = districtHealth(s, s.districts[0]);
-  // weighted avg of (0.2 * 2) and (1 * 1) = 1.4/3 ≈ 0.467 — pulled toward the heavier direct side
+  // weighted avg of two 0.2 buildings and one condition-1 landmark = 1.4/3 ≈ 0.467
   expect(h).toBeGreaterThan(0.2);
   expect(h).toBeLessThan(0.6);
+});
+
+it('each building decays on its own, so a district becomes a patchwork', () => {
+  // Same habits, but buildings diverge thanks to per-building entropy variance.
+  const neighborhoods = Array.from({ length: 8 }, (_, i) => ({
+    id: `nb-d1-d-${i}`,
+    districtId: 'd1',
+    boroughId: null,
+    health: 0.8,
+    createdDay: 0,
+  }));
+  let s = createCity({ districts: [dist('d1')], neighborhoods });
+  for (let i = 0; i < 30; i++) s = applyMissedDay(s);
+  const healths = s.neighborhoods.map((n) => n.health);
+  const spread = Math.max(...healths) - Math.min(...healths);
+  expect(spread).toBeGreaterThan(0); // they did not all decay identically
 });
 
 it('maturity accrues at pristine and unlocks features', () => {
@@ -137,6 +159,21 @@ it('maturity accrues at pristine and unlocks features', () => {
   expect(t.districts[0].maturity).toBeGreaterThan(0);
   expect(t.districts[0].features).toContain('fountain');
   expect(t.districts[0].features.includes('gardens')).toBe(false);
+});
+
+it('naming the city anchors the day counter; day advances with the calendar', () => {
+  let s = createCity({ districts: [dist('d1')] });
+  // Unnamed → day 0 and no anchor.
+  expect(cityDay(s.profile, '2026-06-23')).toBe(0);
+  // Set the name → anchors startDate to today; that day is Day 1.
+  s = setProfile(s, { ...s.profile, name: 'Joseph' }, '2026-06-23');
+  expect(s.profile.startDateISO).toBe('2026-06-23');
+  expect(cityDay(s.profile, '2026-06-23')).toBe(1);
+  expect(cityDay(s.profile, '2026-06-24')).toBe(2);
+  expect(cityDay(s.profile, '2026-07-23')).toBe(31);
+  // Re-saving the profile later does not move the anchor.
+  s = setProfile(s, { ...s.profile, name: 'Joe' }, '2026-07-01');
+  expect(s.profile.startDateISO).toBe('2026-06-23');
 });
 
 it('add and remove milestones', () => {
