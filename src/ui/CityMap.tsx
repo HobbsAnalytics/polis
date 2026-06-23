@@ -1,29 +1,49 @@
 import { useMemo } from 'react';
 import type { CityViewModel } from '../engine/types.ts';
 import { CONDITIONS, conditionColor } from '../engine/viewModel.ts';
-import { buildCityscape } from '../engine/cityscape.ts';
+import { buildCityscape, hexCorner, HEX_DIRS } from '../engine/cityscape.ts';
 import type { PlacedTile } from '../engine/cityscape.ts';
 import { useTooltip } from './useTooltip.tsx';
 
 const FEATURE_FILL = '#eab308';
 const DISTRICT_COLORS = ['#3b82f6', '#a855f7', '#14b8a6', '#ef4444', '#f59e0b', '#8b5cf6', '#0ea5e9', '#db2777'];
+const BOROUGH_COLORS = ['#1e293b', '#7c2d12', '#064e3b', '#581c87', '#0c4a6e', '#713f12'];
 
 function hexPoints(s: number): string {
-  const pts: string[] = [];
-  for (let i = 0; i < 6; i++) {
-    const ang = (Math.PI / 180) * (60 * i - 30);
-    pts.push(`${(s * Math.cos(ang)).toFixed(2)},${(s * Math.sin(ang)).toFixed(2)}`);
-  }
-  return pts.join(' ');
+  return Array.from({ length: 6 }, (_, i) => {
+    const c = hexCorner(i, s);
+    return `${c.x.toFixed(2)},${c.y.toFixed(2)}`;
+  }).join(' ');
 }
 
 function tileInfo(t: PlacedTile): string {
   if (t.kind === 'feature') return `${t.districtName} · ${t.label}`;
-  if (t.kind === 'landmark') {
-    const where = t.boroughName ? `${t.districtName} › ${t.boroughName}` : t.districtName;
-    return `${where} · landmark: ${t.label} (tier ${t.tier ?? 0}) · ${t.conditionLabel}`;
+  const where = t.boroughName ? `${t.districtName} › ${t.boroughName}` : t.districtName;
+  if (t.kind === 'landmark') return `${where} · landmark: ${t.label} (tier ${t.tier ?? 0}) · ${t.conditionLabel}`;
+  return `${where} · neighborhood · ${t.conditionLabel}`;
+}
+
+/** Trace the boundary of a set of hex cells: any edge whose neighbor is outside the set. */
+function boundaryPath(cells: PlacedTile[], s: number): string {
+  const inSet = new Set(cells.map((c) => `${c.q},${c.r}`));
+  const segs: string[] = [];
+  for (const c of cells) {
+    for (let k = 0; k < 6; k++) {
+      const nb = `${c.q + HEX_DIRS[k].q},${c.r + HEX_DIRS[k].r}`;
+      if (inSet.has(nb)) continue;
+      const a = hexCorner(k, s);
+      const b = hexCorner((k + 1) % 6, s);
+      segs.push(`M${(c.x + a.x).toFixed(2)},${(c.y + a.y).toFixed(2)}L${(c.x + b.x).toFixed(2)},${(c.y + b.y).toFixed(2)}`);
+    }
   }
-  return `${t.districtName} · neighborhood · ${t.conditionLabel}`;
+  return segs.join('');
+}
+
+function centroid(tiles: PlacedTile[]): { x: number; y: number } {
+  return {
+    x: tiles.reduce((a, t) => a + t.x, 0) / tiles.length,
+    y: tiles.reduce((a, t) => a + t.y, 0) / tiles.length,
+  };
 }
 
 export function CityMap({ vm }: { vm: CityViewModel }) {
@@ -33,19 +53,32 @@ export function CityMap({ vm }: { vm: CityViewModel }) {
     const scape = buildCityscape(vm);
     const s = scape.size;
     const points = hexPoints(s);
-    const colorOf = (districtId: string) =>
+    const districtColor = (districtId: string) =>
       DISTRICT_COLORS[Math.max(0, vm.districts.findIndex((d) => d.id === districtId)) % DISTRICT_COLORS.length];
 
-    // District labels at the top of each patch.
-    const labels = vm.districts
+    // Stable borough color by global borough order.
+    const boroughOrder = vm.districts.flatMap((d) => d.boroughs.map((b) => b.id));
+    const boroughColor = (boroughId: string) =>
+      BOROUGH_COLORS[Math.max(0, boroughOrder.indexOf(boroughId)) % BOROUGH_COLORS.length];
+
+    const districtLabels = vm.districts
       .map((d) => {
         const ts = scape.tiles.filter((t) => t.districtId === d.id);
         if (ts.length === 0) return null;
-        const cx = ts.reduce((a, t) => a + t.x, 0) / ts.length;
-        const minY = Math.min(...ts.map((t) => t.y));
-        return { id: d.id, name: d.name, cx, y: minY - s * 1.2, color: colorOf(d.id) };
+        const c = centroid(ts);
+        return { id: d.id, name: d.name, x: c.x, y: Math.min(...ts.map((t) => t.y)) - s * 1.1, color: districtColor(d.id) };
       })
-      .filter(Boolean) as { id: string; name: string; cx: number; y: number; color: string }[];
+      .filter(Boolean) as { id: string; name: string; x: number; y: number; color: string }[];
+
+    // Borough outlines + labels, traced from each borough's cells.
+    const boroughs = boroughOrder
+      .map((bid) => {
+        const ts = scape.tiles.filter((t) => t.boroughId === bid);
+        if (ts.length === 0) return null;
+        const c = centroid(ts);
+        return { id: bid, name: ts[0].boroughName ?? '', path: boundaryPath(ts, s), x: c.x, y: c.y, color: boroughColor(bid) };
+      })
+      .filter(Boolean) as { id: string; name: string; path: string; x: number; y: number; color: string }[];
 
     return (
       <svg
@@ -55,18 +88,11 @@ export function CityMap({ vm }: { vm: CityViewModel }) {
         aria-label="Hex city map"
         {...handlers}
       >
-        {labels.map((l) => (
-          <text key={l.id} x={l.cx} y={l.y} textAnchor="middle" fontSize={s * 1.1} fontWeight="700" fill={l.color}>
-            {l.name}
-          </text>
-        ))}
-
         {scape.tiles.map((t) => {
           const fill = t.kind === 'feature' ? FEATURE_FILL : conditionColor(t.conditionLabel ?? 'ruin');
-          const stroke = colorOf(t.districtId);
           return (
-            <g key={t.key} transform={`translate(${t.x.toFixed(2)},${t.y.toFixed(2)})`} data-info={tileInfo(t)}>
-              <polygon points={points} fill={fill} stroke={stroke} strokeWidth={t.kind === 'landmark' ? 2 : 0.5} />
+            <g key={t.key + t.districtId} transform={`translate(${t.x.toFixed(2)},${t.y.toFixed(2)})`} data-info={tileInfo(t)}>
+              <polygon points={points} fill={fill} stroke={districtColor(t.districtId)} strokeWidth={t.kind === 'landmark' ? 1.5 : 0.5} />
               {t.kind === 'feature' && (
                 <text textAnchor="middle" dominantBaseline="central" fontSize={s}>
                   {t.emoji}
@@ -85,6 +111,44 @@ export function CityMap({ vm }: { vm: CityViewModel }) {
             </g>
           );
         })}
+
+        {/* Borough outlines sit above the tiles so the section reads clearly. */}
+        {boroughs.map((b) => (
+          <path
+            key={b.id}
+            d={b.path}
+            fill="none"
+            stroke={b.color}
+            strokeWidth={2.5}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            opacity={0.9}
+          />
+        ))}
+        {boroughs.map((b) => (
+          <text
+            key={`lbl-${b.id}`}
+            x={b.x}
+            y={b.y}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize={s * 0.7}
+            fontWeight="700"
+            fill={b.color}
+            stroke="#fff"
+            strokeWidth={0.6}
+            paintOrder="stroke"
+            style={{ pointerEvents: 'none' }}
+          >
+            {b.name}
+          </text>
+        ))}
+
+        {districtLabels.map((l) => (
+          <text key={l.id} x={l.x} y={l.y} textAnchor="middle" fontSize={s * 1.1} fontWeight="700" fill={l.color}>
+            {l.name}
+          </text>
+        ))}
       </svg>
     );
   }, [vm]);
@@ -93,8 +157,8 @@ export function CityMap({ vm }: { vm: CityViewModel }) {
     <div className="panel">
       <h2>City map</h2>
       <p className="muted">
-        Each hex is a building; districts are neighborhoods. Color shows condition — hover any tile
-        for detail.
+        One city, carved into districts; boroughs are outlined sections within them. Each hex is a
+        single building with its own condition — hover any tile for detail.
       </p>
 
       <div className="legend">

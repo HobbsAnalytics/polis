@@ -1,4 +1,10 @@
 // Pure hex-map layout derived from the view model. UI-free and deterministic.
+//
+// The whole city is ONE contiguous hex disc. Every tile (building, landmark,
+// feature) occupies a cell of that disc. Cells are handed to districts as
+// contiguous angular wedges sized by each district's tile count, and within a
+// district its boroughs take contiguous sub-wedges — so the map reads as one
+// round city carved into irregular districts, each holding visible boroughs.
 import type { CityViewModel, ConditionLabel } from './types.ts';
 
 export interface PlacedTile {
@@ -7,10 +13,13 @@ export interface PlacedTile {
   conditionLabel?: ConditionLabel;
   districtId: string;
   districtName: string;
+  boroughId: string | null;
+  boroughName?: string;
   label: string;
   emoji?: string;
   tier?: number;
-  boroughName?: string;
+  q: number;
+  r: number;
   x: number;
   y: number;
 }
@@ -27,8 +36,8 @@ interface Axial {
   r: number;
 }
 
-// Axial directions for spiral walking.
-const DIRS: Axial[] = [
+// Axial neighbor directions; index i corresponds to hex edge i (see hexCorner).
+export const HEX_DIRS: Axial[] = [
   { q: 1, r: 0 },
   { q: 0, r: 1 },
   { q: -1, r: 1 },
@@ -45,13 +54,13 @@ export function hexSpiral(n: number): Axial[] {
   let k = 1;
   while (out.length < n) {
     // Start each ring offset k steps along direction 4, then walk the 6 sides.
-    let q = DIRS[4].q * k;
-    let r = DIRS[4].r * k;
+    let q = HEX_DIRS[4].q * k;
+    let r = HEX_DIRS[4].r * k;
     for (let side = 0; side < 6 && out.length < n; side++) {
       for (let step = 0; step < k && out.length < n; step++) {
         out.push({ q, r });
-        q += DIRS[side].q;
-        r += DIRS[side].r;
+        q += HEX_DIRS[side].q;
+        r += HEX_DIRS[side].r;
       }
     }
     k++;
@@ -59,106 +68,136 @@ export function hexSpiral(n: number): Axial[] {
   return out;
 }
 
-function axialToPixel(a: Axial, s: number): { x: number; y: number } {
+export function axialToPixel(a: Axial, s: number): { x: number; y: number } {
   return { x: s * Math.sqrt(3) * (a.q + a.r / 2), y: s * 1.5 * a.r };
 }
 
-interface BuildOpts {
-  size?: number;
-  gap?: number;
-  maxRowWidth?: number;
+/** Corner `i` (0..5) of a pointy-top hex of size `s`, relative to its center. */
+export function hexCorner(i: number, s: number): { x: number; y: number } {
+  const ang = (Math.PI / 180) * (60 * i - 30);
+  return { x: s * Math.cos(ang), y: s * Math.sin(ang) };
 }
 
-export function buildCityscape(vm: CityViewModel, opts: BuildOpts = {}): Cityscape {
-  const s = opts.size ?? 14;
-  const hexW = Math.sqrt(3) * s;
-  const hexH = 2 * s;
-  const gap = opts.gap ?? hexW * 1.5;
-  const maxRowWidth = opts.maxRowWidth ?? 1000;
+// A tile before it's been assigned a cell — carries everything but coordinates.
+type Cell = Omit<PlacedTile, 'q' | 'r' | 'x' | 'y'>;
+interface Group {
+  boroughId: string | null;
+  cells: Cell[];
+}
 
-  const tiles: PlacedTile[] = [];
-  let cursorX = 0;
-  let rowY = 0;
-  let rowMaxHeight = 0;
-  let globalMaxX = 0;
-  let globalMaxY = 0;
-
-  for (const d of vm.districts) {
-    const landmarks = [...d.landmarks.map((l) => ({ l, boroughName: undefined as string | undefined }))];
-    for (const b of d.boroughs) {
-      for (const l of b.landmarks) landmarks.push({ l, boroughName: b.name });
-    }
-    const features = d.features;
-    const generics = d.generic;
-    const total = landmarks.length + features.length + generics.length;
-    if (total === 0) continue;
-
-    const coords = hexSpiral(total).map((a) => axialToPixel(a, s));
-    const localMinX = Math.min(...coords.map((c) => c.x)) - s;
-    const localMaxX = Math.max(...coords.map((c) => c.x)) + s;
-    const localMinY = Math.min(...coords.map((c) => c.y)) - s;
-    const localMaxY = Math.max(...coords.map((c) => c.y)) + s;
-    const clusterW = localMaxX - localMinX;
-    const clusterH = localMaxY - localMinY;
-
-    if (cursorX > 0 && cursorX + clusterW > maxRowWidth) {
-      cursorX = 0;
-      rowY += rowMaxHeight + gap;
-      rowMaxHeight = 0;
-    }
-    const offX = cursorX - localMinX;
-    const offY = rowY - localMinY;
-
-    let i = 0;
-    const placeNext = (t: Omit<PlacedTile, 'x' | 'y' | 'key'> & { key: string }) => {
-      const c = coords[i];
-      tiles.push({ ...t, x: c.x + offX, y: c.y + offY });
-      i++;
-    };
-
-    landmarks.forEach(({ l, boroughName }, j) =>
-      placeNext({
-        key: `${d.id}:lm:${l.id ?? j}`,
-        kind: 'landmark',
-        conditionLabel: l.label,
-        districtId: d.id,
-        districtName: d.name,
-        label: l.name,
-        tier: l.tier,
-        boroughName,
-      }),
-    );
-    features.forEach((f) =>
-      placeNext({
-        key: `${d.id}:ft:${f.id}`,
-        kind: 'feature',
-        districtId: d.id,
-        districtName: d.name,
-        label: f.name,
-        emoji: f.emoji,
-      }),
-    );
-    generics.forEach((g, j) =>
-      placeNext({
-        key: `${d.id}:gn:${j}`,
+/** The ordered groups (boroughs first, then district-direct) for one district. */
+function districtGroups(d: CityViewModel['districts'][number]): Group[] {
+  const groups: Group[] = [];
+  for (const b of d.boroughs) {
+    const cells: Cell[] = [];
+    b.generic.forEach((g) =>
+      cells.push({
+        key: `gn:${g.id}`,
         kind: 'generic',
         conditionLabel: g.label,
         districtId: d.id,
         districtName: d.name,
-        label: d.name,
+        boroughId: b.id,
+        boroughName: b.name,
+        label: b.name,
       }),
     );
+    b.landmarks.forEach((l) =>
+      cells.push({
+        key: `lm:${l.id}`,
+        kind: 'landmark',
+        conditionLabel: l.label,
+        districtId: d.id,
+        districtName: d.name,
+        boroughId: b.id,
+        boroughName: b.name,
+        label: l.name,
+        tier: l.tier,
+      }),
+    );
+    if (cells.length > 0) groups.push({ boroughId: b.id, cells });
+  }
+  const direct: Cell[] = [];
+  d.landmarks.forEach((l) =>
+    direct.push({
+      key: `lm:${l.id}`,
+      kind: 'landmark',
+      conditionLabel: l.label,
+      districtId: d.id,
+      districtName: d.name,
+      boroughId: null,
+      label: l.name,
+      tier: l.tier,
+    }),
+  );
+  d.features.forEach((f) =>
+    direct.push({
+      key: `ft:${f.id}`,
+      kind: 'feature',
+      districtId: d.id,
+      districtName: d.name,
+      boroughId: null,
+      label: f.name,
+      emoji: f.emoji,
+    }),
+  );
+  d.generic.forEach((g) =>
+    direct.push({
+      key: `gn:${g.id}`,
+      kind: 'generic',
+      conditionLabel: g.label,
+      districtId: d.id,
+      districtName: d.name,
+      boroughId: null,
+      label: d.name,
+    }),
+  );
+  if (direct.length > 0) groups.push({ boroughId: null, cells: direct });
+  return groups;
+}
 
-    cursorX += clusterW + gap;
-    rowMaxHeight = Math.max(rowMaxHeight, clusterH);
-    globalMaxX = Math.max(globalMaxX, cursorX - gap);
-    globalMaxY = Math.max(globalMaxY, rowY + clusterH);
+interface BuildOpts {
+  size?: number;
+}
+
+export function buildCityscape(vm: CityViewModel, opts: BuildOpts = {}): Cityscape {
+  const s = opts.size ?? 14;
+
+  // Districts in order, each as its ordered groups. Districts with no tiles drop out.
+  const districts = vm.districts.map((d) => ({ d, groups: districtGroups(d) })).filter((x) => x.groups.length > 0);
+  const total = districts.reduce((n, x) => n + x.groups.reduce((m, g) => m + g.cells.length, 0), 0);
+  if (total === 0) return { tiles: [], width: s * 2, height: s * 2, size: s };
+
+  // One disc of `total` cells, swept into contiguous angular wedges. Sorting by
+  // angle then radius makes each consecutive run of cells a connected sector.
+  const coords = hexSpiral(total)
+    .map((a) => ({ a, p: axialToPixel(a, s) }))
+    .sort((u, v) => {
+      const au = Math.atan2(u.p.y, u.p.x);
+      const av = Math.atan2(v.p.y, v.p.x);
+      if (au !== av) return au - av;
+      return u.p.x * u.p.x + u.p.y * u.p.y - (v.p.x * v.p.x + v.p.y * v.p.y);
+    });
+
+  const tiles: PlacedTile[] = [];
+  let i = 0;
+  for (const { groups } of districts) {
+    for (const g of groups) {
+      for (const cell of g.cells) {
+        const { a, p } = coords[i++];
+        tiles.push({ ...cell, q: a.q, r: a.r, x: p.x, y: p.y });
+      }
+    }
   }
 
-  return {
-    tiles,
-    width: Math.max(globalMaxX + hexW, hexW),
-    height: Math.max(globalMaxY + hexH, hexH),
-    size: s,
-  };
+  // Translate so the disc sits in a positive viewbox with an `s` margin.
+  const minX = Math.min(...tiles.map((t) => t.x)) - s;
+  const minY = Math.min(...tiles.map((t) => t.y)) - s;
+  for (const t of tiles) {
+    t.x -= minX;
+    t.y -= minY;
+  }
+  const width = Math.max(...tiles.map((t) => t.x)) + s;
+  const height = Math.max(...tiles.map((t) => t.y)) + s;
+  return { tiles, width, height, size: s };
 }

@@ -1,7 +1,7 @@
 // Pure life-in-weeks math. No wall clock: today is passed in.
-import type { Profile } from './types.ts';
+import type { DayLog, Profile } from './types.ts';
 import type { EraDef } from '../data/eras.ts';
-import { MS_PER_DAY, MS_PER_WEEK } from './dates.ts';
+import { MS_PER_DAY, MS_PER_WEEK, weekIndex } from './dates.ts';
 
 const WEEKS_PER_YEAR = 52;
 
@@ -50,6 +50,33 @@ export interface LifelineVM {
   age: number;
   currentEraId: string;
   years: YearRowVM[];
+}
+
+/**
+ * How the city fared over a week, from the summed net health change of its days.
+ * 'none' = no recorded activity that week (box keeps its lived/future shade).
+ */
+export type WeekTrend = 'up' | 'slight-up' | 'flat' | 'slight-down' | 'down' | 'none';
+
+/** Sum each day's net health change into its birthday-anchored week. */
+export function weeklyHealthChange(log: DayLog[], birthDateISO: string): Map<number, number> {
+  const byWeek = new Map<number, number>();
+  for (const d of log) {
+    if (!d.dateISO) continue; // pre-calendar logs carry no date — skip
+    const wk = weekIndex(birthDateISO, d.dateISO);
+    byWeek.set(wk, (byWeek.get(wk) ?? 0) + d.netHealthChange);
+  }
+  return byWeek;
+}
+
+/** Bucket a week's net change into a trend band. Thresholds are deliberately gentle. */
+export function weekTrend(net: number | undefined): WeekTrend {
+  if (net === undefined) return 'none';
+  if (net > 0.1) return 'up';
+  if (net > 0.01) return 'slight-up';
+  if (net >= -0.01) return 'flat';
+  if (net >= -0.1) return 'slight-down';
+  return 'down';
 }
 
 export function buildLifeline(profile: Profile, todayISO: string, eras: EraDef[]): LifelineVM {

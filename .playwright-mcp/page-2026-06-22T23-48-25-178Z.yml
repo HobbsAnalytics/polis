@@ -1,0 +1,69 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - heading "Polis" [level=1] [ref=e6]
+      - paragraph [ref=e7]: Your city, your self · day 0
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - button "City" [ref=e10] [cursor=pointer]
+        - button "Map" [ref=e11] [cursor=pointer]
+        - button "Life" [ref=e12] [cursor=pointer]
+        - button "Profile" [ref=e13] [cursor=pointer]
+      - button "Export" [ref=e14] [cursor=pointer]
+      - generic [ref=e15] [cursor=pointer]: Import
+  - generic [ref=e16]:
+    - generic [ref=e17]: Age of Ascent
+    - generic [ref=e18]: Early family & career · age 37 · week 1,964 of 3,900
+  - generic [ref=e19]:
+    - heading "Daily check-in" [level=2] [ref=e20]
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - generic [ref=e23]: Good habits
+        - paragraph [ref=e24]: none yet
+      - generic [ref=e25]:
+        - generic [ref=e26]: Bad habits (mark if you did it)
+        - paragraph [ref=e27]: none yet
+    - button "Complete check-in" [ref=e28] [cursor=pointer]
+  - generic [ref=e30]:
+    - generic [ref=e31]:
+      - heading "Home" [level=3] [ref=e32]
+      - generic [ref=e33]: crumbling
+    - paragraph
+    - generic [ref=e36]: Neighborhood (6 buildings)
+    - generic [ref=e37]:
+      - generic "crumbling" [ref=e38]
+      - generic "crumbling" [ref=e39]
+      - generic "crumbling" [ref=e40]
+      - generic "crumbling" [ref=e41]
+      - generic "crumbling" [ref=e42]
+      - generic "crumbling" [ref=e43]
+  - generic [ref=e44]:
+    - generic [ref=e45]:
+      - heading "🛠 Time-travel (dev only)" [level=2] [ref=e46]
+      - button "Reset to seed" [ref=e47] [cursor=pointer]
+    - paragraph [ref=e48]: Temporary tool to fast-forward simulated days. Not in the final product.
+    - generic [ref=e49]:
+      - generic [ref=e50]:
+        - generic [ref=e51]:
+          - text: All good habits
+          - generic [ref=e52]: every good habit done each day
+        - generic [ref=e53]:
+          - button "+1d" [ref=e54] [cursor=pointer]
+          - button "+7d" [ref=e55] [cursor=pointer]
+          - button "+30d" [ref=e56] [cursor=pointer]
+      - generic [ref=e57]:
+        - generic [ref=e58]:
+          - text: Neglect
+          - generic [ref=e59]: no check-in (entropy only)
+        - generic [ref=e60]:
+          - button "+1d" [ref=e61] [cursor=pointer]
+          - button "+7d" [ref=e62] [cursor=pointer]
+          - button "+30d" [ref=e63] [cursor=pointer]
+      - generic [ref=e64]:
+        - generic [ref=e65]:
+          - text: All bad habits
+          - generic [ref=e66]: every bad habit logged each day
+        - generic [ref=e67]:
+          - button "+1d" [ref=e68] [cursor=pointer]
+          - button "+7d" [ref=e69] [cursor=pointer]
+          - button "+30d" [ref=e70] [cursor=pointer]

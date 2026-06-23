@@ -4,7 +4,8 @@ import { createCity, addDistrict } from './engine.ts';
 /**
  * Builds the initial CityState for a brand-new save: a minimal scaffold.
  * Blank profile name, a single starter district named "Home" (the user renames
- * it in the Profile tab), and no boroughs, habits, or landmarks.
+ * it in the Profile tab), and no boroughs, habits, or landmarks. `addDistrict`
+ * seeds the district's starter neighborhoods.
  */
 export function createSeededCity(): CityState {
   return addDistrict(createCity(), { name: 'Home' }).state;

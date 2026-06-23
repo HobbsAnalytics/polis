@@ -33,6 +33,13 @@ function BoroughBlock({ borough }: { borough: BoroughVM }) {
       <div className="bar bar-lg">
         <div className={`bar-fill cond-${slug}`} style={{ width: pct(borough.health) }} />
       </div>
+      {borough.generic.length > 0 && (
+        <div className="chips">
+          {borough.generic.map((b) => (
+            <span key={b.id} className={`chip cond-${conditionSlug(b.label)}`} title={b.label} />
+          ))}
+        </div>
+      )}
       {borough.landmarks.map((lm) => (
         <LandmarkRow key={lm.id} lm={lm} />
       ))}
@@ -73,8 +80,8 @@ export function DistrictCard({ district }: { district: DistrictVM }) {
         {district.generic.length === 0 ? (
           <span className="abandoned">empty lot</span>
         ) : (
-          district.generic.map((b, i) => (
-            <span key={i} className={`chip cond-${conditionSlug(b.label)}`} title={b.label} />
+          district.generic.map((b) => (
+            <span key={b.id} className={`chip cond-${conditionSlug(b.label)}`} title={b.label} />
           ))
         )}
       </div>

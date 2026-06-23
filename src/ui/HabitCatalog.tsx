@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { SelectHTMLAttributes } from 'react';
 import type { Borough, District, Habit, Landmark, NodeKind } from '../engine/types.ts';
 import { dayDiffISO } from '../engine/dates.ts';
 
@@ -7,6 +8,33 @@ export interface NewHabitFields {
   kind: Habit['kind'];
   weight: number;
   target: { kind: NodeKind; id: string };
+}
+
+/** How much a habit matters → its numeric weight in the simulation. */
+const IMPORTANCE: { weight: number; label: string }[] = [
+  { weight: 1, label: 'Somewhat important' },
+  { weight: 2, label: 'Important' },
+  { weight: 3, label: 'Very important' },
+];
+
+function ImportanceSelect({
+  value,
+  onChange,
+  ...rest
+}: {
+  value: number;
+  onChange: (weight: number) => void;
+} & Omit<SelectHTMLAttributes<HTMLSelectElement>, 'value' | 'onChange'>) {
+  // Clamp legacy weights >3 onto "Very important" for display, without rewriting them.
+  return (
+    <select value={Math.min(3, Math.max(1, value))} onChange={(e) => onChange(Number(e.target.value))} {...rest}>
+      {IMPORTANCE.map((o) => (
+        <option key={o.weight} value={o.weight}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 interface Props {
@@ -97,15 +125,8 @@ export function HabitCatalog({
           </select>
         </label>
         <label className="field">
-          Weight
-          <input
-            name="habitWeight"
-            type="number"
-            min={1}
-            step={1}
-            value={weight}
-            onChange={(e) => setWeight(Math.max(1, Number(e.target.value) || 1))}
-          />
+          Importance
+          <ImportanceSelect value={weight} onChange={setWeight} name="habitWeight" />
         </label>
         <label className="field">
           Attach to
@@ -150,17 +171,12 @@ export function HabitCatalog({
                   onChange={(e) => onUpdateHabit(h.id, { name: e.target.value })}
                 />
                 <span className={`badge ${h.kind === 'bad' ? 'tcond-onfire' : 'tcond-pristine'}`}>{h.kind}</span>
-                <label className="weight-edit">
-                  ×
-                  <input
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={h.weight}
-                    aria-label="Habit weight"
-                    onChange={(e) => onUpdateHabit(h.id, { weight: Math.max(1, Number(e.target.value) || 1) })}
-                  />
-                </label>
+                <ImportanceSelect
+                  className="weight-edit"
+                  value={h.weight}
+                  aria-label="Habit importance"
+                  onChange={(weight) => onUpdateHabit(h.id, { weight })}
+                />
                 <span className="tier">{resolveDistrictName(h)}</span>
               </div>
               {pending ? (

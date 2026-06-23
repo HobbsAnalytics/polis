@@ -16,7 +16,8 @@ it('tile count equals generics + landmarks (incl. borough) + features', () => {
   const vm = buildCityViewModel(createSeededCity());
   const expected = vm.districts.reduce((sum, d) => {
     const landmarks = d.landmarks.length + d.boroughs.reduce((b, x) => b + x.landmarks.length, 0);
-    return sum + d.generic.length + landmarks + d.features.length;
+    const boroughGeneric = d.boroughs.reduce((b, x) => b + x.generic.length, 0);
+    return sum + d.generic.length + boroughGeneric + landmarks + d.features.length;
   }, 0);
   expect(buildCityscape(vm).tiles).toHaveLength(expected);
 });

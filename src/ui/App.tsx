@@ -13,6 +13,7 @@ import {
   renameBorough,
   applyCheckIn,
   applyMissedDay,
+  cityDay,
   requestHabitRemoval,
   cancelHabitRemoval,
   confirmHabitRemoval,
@@ -40,10 +41,12 @@ import type { NewHabitFields } from './HabitCatalog.tsx';
 import { LifePage } from './LifePage.tsx';
 import { CityMap } from './CityMap.tsx';
 import { ProfilePage } from './ProfilePage.tsx';
+import { HistoryPage } from './HistoryPage.tsx';
 import { DevPanel } from './DevPanel.tsx';
 import type { AdvanceMode } from './DevPanel.tsx';
+import { addDaysISO } from '../engine/dates.ts';
 
-type Page = 'city' | 'map' | 'life' | 'profile';
+type Page = 'city' | 'map' | 'life' | 'history' | 'profile';
 
 export function App() {
   const [city, setCity] = useState<CityState | null>(null);
@@ -65,8 +68,8 @@ export function App() {
 
   function handleCheckIn(completedHabitIds: string[], loggedBadHabitIds: string[]) {
     if (!city) return;
-    const next = applyCheckIn(city, { completedHabitIds, loggedBadHabitIds });
     const today = todayISO();
+    const next = applyCheckIn(city, { completedHabitIds, loggedBadHabitIds, dateISO: today });
     recordCheckIn(today);
     setLastCheckIn(today);
     update(next);
@@ -121,7 +124,7 @@ export function App() {
   }
 
   function handleSetProfile(profile: Profile) {
-    if (city) update(setProfile(city, profile));
+    if (city) update(setProfile(city, profile, todayISO()));
   }
 
   function handleAddMilestone(label: string, dateISO: string) {
@@ -147,10 +150,13 @@ export function App() {
     const goodIds = city.habits.filter((h) => h.kind === 'good').map((h) => h.id);
     const badIds = city.habits.filter((h) => h.kind === 'bad').map((h) => h.id);
     let s = city;
+    // Date the simulated days so they land in real (recent) weeks — lets the
+    // activity log and Life-tab week colors populate when fast-forwarding.
     for (let i = 0; i < times; i++) {
-      if (mode === 'good') s = applyCheckIn(s, { completedHabitIds: goodIds, loggedBadHabitIds: [] });
-      else if (mode === 'bad') s = applyCheckIn(s, { completedHabitIds: [], loggedBadHabitIds: badIds });
-      else s = applyMissedDay(s);
+      const dateISO = addDaysISO(todayISO(), -(times - 1 - i));
+      if (mode === 'good') s = applyCheckIn(s, { completedHabitIds: goodIds, loggedBadHabitIds: [], dateISO });
+      else if (mode === 'bad') s = applyCheckIn(s, { completedHabitIds: [], loggedBadHabitIds: badIds, dateISO });
+      else s = applyMissedDay(s, dateISO);
     }
     update(s);
   }
@@ -189,6 +195,8 @@ export function App() {
   const lifeline = buildLifeline(city.profile, todayISO(), LIFE_ERAS);
   const era = LIFE_ERAS.find((e) => e.id === lifeline.currentEraId);
   const canCheckIn = lastCheckIn !== todayISO();
+  const named = city.profile.name.trim() !== '';
+  const day = cityDay(city.profile, todayISO());
 
   return (
     <div className="container">
@@ -196,7 +204,8 @@ export function App() {
         <div>
           <h1>Polis</h1>
           <p className="subtitle">
-            {city.profile.name ? `${city.profile.name}'s city` : 'Your city, your self'} · day {vm.day}
+            {named ? `${city.profile.name}'s city` : 'Your city, your self'} ·{' '}
+            {named ? `day ${day}` : 'day 0 — name your city on the Profile tab to start the clock'}
           </p>
         </div>
         <div className="toolbar">
@@ -209,6 +218,9 @@ export function App() {
             </button>
             <button className={`tab ${page === 'life' ? 'tab-on' : ''}`} onClick={() => setPage('life')}>
               Life
+            </button>
+            <button className={`tab ${page === 'history' ? 'tab-on' : ''}`} onClick={() => setPage('history')}>
+              History
             </button>
             <button className={`tab ${page === 'profile' ? 'tab-on' : ''}`} onClick={() => setPage('profile')}>
               Profile
@@ -252,8 +264,9 @@ export function App() {
       )}
       {page === 'map' && <CityMap vm={vm} />}
       {page === 'life' && (
-        <LifePage vm={lifeline} profile={city.profile} eras={LIFE_ERAS} milestones={city.milestones} />
+        <LifePage vm={lifeline} profile={city.profile} eras={LIFE_ERAS} milestones={city.milestones} log={city.log} />
       )}
+      {page === 'history' && <HistoryPage city={city} />}
       {page === 'profile' && (
         <ProfilePage
           city={city}

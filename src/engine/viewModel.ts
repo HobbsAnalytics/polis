@@ -7,6 +7,7 @@ import type {
   GenericBuildingVM,
   Landmark,
   LandmarkVM,
+  Neighborhood,
 } from './types.ts';
 import { FEATURES } from './settings.ts';
 import { boroughHealth, districtHealth } from './rollup.ts';
@@ -48,15 +49,11 @@ export function conditionColor(label: ConditionLabel): string {
 }
 
 /**
- * Live buildings scale with current health (responsive to neglect); legacy
- * buildings accumulate with maturity and never disappear. No cap. Every building
- * shows the district's current condition, so decay reads as color, not vanishing.
+ * One building per neighborhood, each rendered at its own condition — so a
+ * district reads as a patchwork: some blocks pristine, others crumbling.
  */
-function genericBuildings(health: number, maturity: number, baseSpread: number): GenericBuildingVM[] {
-  const live = Math.round(health * baseSpread);
-  const legacy = Math.floor(maturity);
-  const label = conditionLabel(health);
-  return Array.from({ length: live + legacy }, () => ({ condition: health, label }));
+function genericBuildings(neighborhoods: Neighborhood[]): GenericBuildingVM[] {
+  return neighborhoods.map((n) => ({ id: n.id, condition: n.health, label: conditionLabel(n.health) }));
 }
 
 function featureVMs(ids: string[]): FeatureVM[] {
@@ -85,6 +82,7 @@ export function buildCityViewModel(state: CityState): CityViewModel {
           name: b.name,
           health: bHealth,
           label: conditionLabel(bHealth),
+          generic: genericBuildings(state.neighborhoods.filter((n) => n.boroughId === b.id)),
           landmarks: state.landmarks.filter((l) => l.boroughId === b.id).map(toLandmarkVM),
         };
       });
@@ -98,7 +96,7 @@ export function buildCityViewModel(state: CityState): CityViewModel {
       health,
       label: conditionLabel(health),
       maturity: d.maturity,
-      generic: genericBuildings(health, d.maturity, state.settings.baseSpread),
+      generic: genericBuildings(state.neighborhoods.filter((n) => n.districtId === d.id && n.boroughId === null)),
       features: featureVMs(d.features),
       boroughs,
       landmarks,

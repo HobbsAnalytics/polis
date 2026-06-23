@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
-import type { Milestone, Profile } from '../engine/types.ts';
+import type { DayLog, Milestone, Profile } from '../engine/types.ts';
 import type { LifelineVM } from '../engine/lifeline.ts';
-import { weekSundayISO } from '../engine/lifeline.ts';
+import { weekSundayISO, weeklyHealthChange, weekTrend } from '../engine/lifeline.ts';
 import { weekIndex } from '../engine/dates.ts';
 import { useTooltip } from './useTooltip.tsx';
 import { formatDate } from './format.ts';
@@ -12,9 +12,18 @@ interface Props {
   profile: Profile;
   eras: EraDef[];
   milestones: Milestone[];
+  log: DayLog[];
 }
 
-export function LifePage({ vm, profile, eras, milestones }: Props) {
+const TREND_LABEL: Record<string, string> = {
+  up: 'thrived',
+  'slight-up': 'improved',
+  flat: 'held steady',
+  'slight-down': 'slipped',
+  down: 'declined',
+};
+
+export function LifePage({ vm, profile, eras, milestones, log }: Props) {
   const { handlers, tooltip } = useTooltip('.life-box', 240);
 
   const eraById = (id: string) => eras.find((e) => e.id === id);
@@ -37,9 +46,12 @@ export function LifePage({ vm, profile, eras, milestones }: Props) {
         byWeek.set(idx, [...(byWeek.get(idx) ?? []), m]);
       }
     }
+    const changeByWeek = weeklyHealthChange(log, profile.birthDateISO);
     const boxInfo = (index: number, isBirthday: boolean, year: number): string => {
       let t = `Week of ${formatDate(weekSundayISO(profile.birthDateISO, index))}`;
       if (isBirthday) t += ` · Birthday (age ${year})`;
+      const trend = weekTrend(changeByWeek.get(index));
+      if (trend !== 'none') t += ` · city ${TREND_LABEL[trend]}`;
       const ms = byWeek.get(index);
       if (ms) t += ` · ${ms.map((m) => m.label).join(', ')}`;
       return t;
@@ -58,13 +70,16 @@ export function LifePage({ vm, profile, eras, milestones }: Props) {
             >
               <div className="life-era-label">{row.eraStart ? era?.name : ''}</div>
               <div className="life-weeks">
-                {row.weeks.map((c, i) => (
-                  <span
-                    key={c.index}
-                    className={`life-box life-${c.status} ${i === 0 ? 'life-birthday' : ''} ${byWeek.has(c.index) ? 'life-milestone' : ''}`}
-                    data-info={boxInfo(c.index, i === 0, row.yearIndex)}
-                  />
-                ))}
+                {row.weeks.map((c, i) => {
+                  const trend = weekTrend(changeByWeek.get(c.index));
+                  return (
+                    <span
+                      key={c.index}
+                      className={`life-box life-${c.status} ${trend !== 'none' ? `life-trend-${trend}` : ''} ${i === 0 ? 'life-birthday' : ''} ${byWeek.has(c.index) ? 'life-milestone' : ''}`}
+                      data-info={boxInfo(c.index, i === 0, row.yearIndex)}
+                    />
+                  );
+                })}
               </div>
             </div>
           );
@@ -72,7 +87,7 @@ export function LifePage({ vm, profile, eras, milestones }: Props) {
       </div>
     );
     // eraById is a stable closure over `eras`; deps cover the real inputs.
-  }, [vm, milestones, profile, eras]);
+  }, [vm, milestones, profile, eras, log]);
 
   return (
     <div>
@@ -122,6 +137,27 @@ export function LifePage({ vm, profile, eras, milestones }: Props) {
               {e.name} <span className="tier">({e.startAge}–{e.endAge})</span>
             </span>
           ))}
+        </div>
+        <p className="muted">
+          Lived weeks are tinted by how your city fared that week — green when it thrived through
+          orange when it declined; grey weeks had no recorded activity.
+        </p>
+        <div className="legend">
+          <span className="legend-item">
+            <span className="legend-swatch" style={{ background: 'var(--pristine)' }} /> thrived
+          </span>
+          <span className="legend-item">
+            <span className="legend-swatch" style={{ background: 'var(--worn)' }} /> improved
+          </span>
+          <span className="legend-item">
+            <span className="legend-swatch" style={{ background: 'var(--stone-400)' }} /> steady
+          </span>
+          <span className="legend-item">
+            <span className="legend-swatch" style={{ background: 'var(--crumbling)' }} /> slipped
+          </span>
+          <span className="legend-item">
+            <span className="legend-swatch" style={{ background: 'var(--onfire)' }} /> declined
+          </span>
         </div>
 
         {grid}
