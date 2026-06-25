@@ -558,6 +558,71 @@ body {
   border-top: 1px solid var(--stone-200);
 }
 
+/* Profile authoring tree (District › Borough › Landmark) */
+.tree-district {
+  border-top: 1px solid var(--stone-200);
+  padding-top: 0.4rem;
+  margin-top: 0.4rem;
+}
+.tree-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+}
+.tree-toggle {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--stone-500);
+  width: 1.1rem;
+  padding: 0;
+  line-height: 1;
+}
+.tree-toggle:hover {
+  color: var(--stone-800);
+}
+.tree-leaf {
+  width: 1.1rem;
+  text-align: center;
+  font-size: 0.85rem;
+}
+.tree-children {
+  margin-left: 0.55rem;
+  padding-left: 0.85rem;
+  border-left: 2px solid var(--stone-200);
+}
+.tree-borough,
+.tree-landmark {
+  margin-top: 0.2rem;
+}
+.tree-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.35rem 0;
+}
+.btn-sm {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+}
+.add-form {
+  background: var(--stone-50);
+  border: 1px solid var(--stone-200);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  margin: 0.35rem 0;
+}
+.add-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 /* Temporary dev panel */
 .dev-panel {
   border: 1px dashed var(--stone-400);

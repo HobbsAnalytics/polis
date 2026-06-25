@@ -35,19 +35,20 @@ export const DISTRICTS: DistrictDef[] = [
 
 export const BOROUGHS: BoroughDef[] = [
   { id: 'b1', districtId: 'd1', name: 'Sample Borough' },
+  { id: 'b2', districtId: 'd2', name: 'Sample Borough Two' },
 ];
 
+// Habits attach to a borough or a landmark only (never a district directly).
 export const HABITS: HabitDef[] = [
-  { id: 'h-d1', name: 'Placeholder good habit (District One)', kind: 'good', weight: 1, target: { kind: 'district', id: 'd1' } },
   { id: 'h-b1', name: 'Placeholder good habit (Sample Borough)', kind: 'good', weight: 1, target: { kind: 'borough', id: 'b1' } },
-  { id: 'h-d2', name: 'Placeholder good habit (District Two, weight 2)', kind: 'good', weight: 2, target: { kind: 'district', id: 'd2' } },
-  { id: 'h-bad-d1', name: 'Placeholder bad habit (District One)', kind: 'bad', weight: 1, target: { kind: 'district', id: 'd1' } },
+  { id: 'h-b2', name: 'Placeholder good habit (Sample Borough Two, weight 2)', kind: 'good', weight: 2, target: { kind: 'borough', id: 'b2' } },
+  { id: 'h-bad-b1', name: 'Placeholder bad habit (Sample Borough)', kind: 'bad', weight: 1, target: { kind: 'borough', id: 'b1' } },
 ];
 
 /** Seed landmark (created in seed.ts so it gets a generated id) and its habits. */
 export const SEED_LANDMARK = {
   districtId: 'd1',
-  boroughId: 'b1' as string | null,
+  boroughId: 'b1' as string,
   name: 'Placeholder Landmark',
   goodHabit: { id: 'h-lm-good', name: 'Placeholder good habit (landmark)', weight: 1 },
   badHabit: { id: 'h-lm-bad', name: 'Placeholder bad habit (landmark)', weight: 1 },

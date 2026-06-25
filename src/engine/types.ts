@@ -2,11 +2,14 @@
 // This module has ZERO UI/render/DOM dependencies.
 
 export type HabitKind = 'good' | 'bad';
+/** Internal node addressing for the roll-up (a district is still a node). */
 export type NodeKind = 'district' | 'borough' | 'landmark';
+/** Where a habit may attach: a borough or a landmark — never a district directly. */
+export type HabitTargetKind = 'borough' | 'landmark';
 
-/** Where a habit attaches. `id` references a district, borough, or landmark. */
+/** Where a habit attaches. `id` references a borough or landmark. */
 export interface TargetRef {
-  kind: NodeKind;
+  kind: HabitTargetKind;
   id: string;
 }
 
@@ -26,7 +29,7 @@ export interface District {
   id: string;
   name: string;
   description: string;
-  healthDirect: number; // 0..1, from habits targeting the district directly
+  healthDirect: number; // 0..1, roll-up fallback only — no habit targets a district anymore
   maturity: number; // >=0, unbounded, sticky
   features: string[]; // unlocked feature ids, sticky
 }
@@ -43,7 +46,7 @@ export interface Borough {
 export interface Landmark {
   id: string;
   districtId: string;
-  boroughId: string | null;
+  boroughId: string; // required — landmarks always live under a borough
   name: string;
   condition: number;
   tier: number;

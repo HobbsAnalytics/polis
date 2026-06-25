@@ -1,4 +1,4 @@
-import type { Borough, CityState, DayLog, District } from '../engine/types.ts';
+import type { Borough, CityState, DayLog, District, Habit, Landmark, Neighborhood } from '../engine/types.ts';
 import { applyMissedDay } from '../engine/engine.ts';
 import { seedNeighborhoods } from '../engine/neighborhoods.ts';
 import { createSeededCity } from '../engine/seed.ts';
@@ -62,7 +62,59 @@ function migrate(obj: Record<string, unknown>): unknown {
     };
     delete (o as Record<string, unknown>).history;
   }
+  if (o.version === 6) {
+    // v7: boroughs become mandatory and habits/landmarks live under a borough.
+    // Back-fill a "General" borough for any borough-less district and re-home
+    // everything parented directly to a district into its first borough.
+    o = migrateV6toV7(o);
+  }
   return o;
+}
+
+/**
+ * v6 → v7: every district gets ≥1 borough; nothing that was parented directly to
+ * a district stays there. Deletes nothing — re-parents one level down, keeping
+ * all ids, health, and history. District-direct habits/landmarks/neighborhoods
+ * move into the district's first borough ("General", created when absent).
+ */
+function migrateV6toV7(o: Record<string, unknown>): Record<string, unknown> {
+  const districts = (o.districts as District[] | undefined) ?? [];
+  const boroughs = [...((o.boroughs as Borough[] | undefined) ?? [])];
+  const habits = [...((o.habits as Habit[] | undefined) ?? [])];
+  const landmarks = [...((o.landmarks as Landmark[] | undefined) ?? [])];
+  const neighborhoods = [...((o.neighborhoods as Neighborhood[] | undefined) ?? [])];
+
+  // The borough each district's direct items re-home into (first existing, else a new General).
+  const homeBoroughId = new Map<string, string>();
+  for (const d of districts) {
+    const existing = boroughs.find((b) => b.districtId === d.id);
+    if (existing) {
+      homeBoroughId.set(d.id, existing.id);
+    } else {
+      const general: Borough = { id: `borough-${d.id}-general`, districtId: d.id, name: 'General', healthDirect: 0.5 };
+      boroughs.push(general);
+      homeBoroughId.set(d.id, general.id);
+    }
+  }
+
+  const rehome = (districtId: string) => homeBoroughId.get(districtId)!;
+
+  return {
+    ...o,
+    boroughs,
+    habits: habits.map((h) =>
+      (h.target.kind as string) === 'district'
+        ? { ...h, target: { kind: 'borough' as const, id: rehome(h.target.id) } }
+        : h,
+    ),
+    landmarks: landmarks.map((lm) =>
+      (lm.boroughId as string | null) == null ? { ...lm, boroughId: rehome(lm.districtId) } : lm,
+    ),
+    neighborhoods: neighborhoods.map((n) =>
+      n.boroughId == null ? { ...n, boroughId: rehome(n.districtId) } : n,
+    ),
+    version: 7,
+  };
 }
 
 /** Old saves stored a thin per-day `history`; carry it forward into `log` shape. */

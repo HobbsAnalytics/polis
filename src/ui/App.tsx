@@ -37,10 +37,10 @@ import {
 } from '../persistence/storage.ts';
 import { CityView } from './CityView.tsx';
 import { CheckIn } from './CheckIn.tsx';
-import type { NewHabitFields } from './HabitCatalog.tsx';
 import { LifePage } from './LifePage.tsx';
 import { CityMap } from './CityMap.tsx';
 import { ProfilePage } from './ProfilePage.tsx';
+import type { NewHabitFields } from './ProfilePage.tsx';
 import { HistoryPage } from './HistoryPage.tsx';
 import { DevPanel } from './DevPanel.tsx';
 import type { AdvanceMode } from './DevPanel.tsx';
@@ -93,14 +93,9 @@ export function App() {
     if (city) update(updateHabit(city, id, fields));
   }
 
-  function handleCreateLandmark(
-    districtId: string,
-    boroughId: string | null,
-    name: string,
-    attachHabitIds: string[],
-  ) {
+  function handleCreateLandmark(districtId: string, boroughId: string, name: string) {
     if (!city) return;
-    update(addLandmark(city, { districtId, boroughId, name, attachHabitIds }).state);
+    update(addLandmark(city, { districtId, boroughId, name }).state);
   }
 
   function handleRenameLandmark(id: string, name: string) {

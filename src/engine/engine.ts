@@ -15,7 +15,6 @@ import { districtHealth, habitsTargeting } from './rollup.ts';
 import {
   grownNeighborhoods,
   neighborhoodsForBorough,
-  neighborhoodsForDistrict,
   updateNeighborhood,
 } from './neighborhoods.ts';
 import { dayDiffISO } from './dates.ts';
@@ -150,13 +149,13 @@ function advanceDay(state: CityState, input: DayInput): CityState {
     advanceLandmarkTier({ ...lm, condition: upd(lm.condition, 'landmark', lm.id) }, s),
   );
   const boroughs = state.boroughs.map((b) => ({ ...b, healthDirect: upd(b.healthDirect, 'borough', b.id) }));
-  const districtsHD = state.districts.map((d) => ({ ...d, healthDirect: upd(d.healthDirect, 'district', d.id) }));
+  // Districts take no direct habits anymore: `healthDirect` is a frozen roll-up
+  // fallback and is left untouched here.
 
-  // Each building drifts on its own: district habits spread to all its
-  // buildings; borough habits add on top for buildings inside that borough.
+  // Each building drifts on its own. No habit targets a district, so a building's
+  // habit-driven delta comes solely from the borough it belongs to (if any).
   const neighborhoods = state.neighborhoods.map((n) => {
-    let delta = containerDelta('district', n.districtId);
-    if (n.boroughId) delta += containerDelta('borough', n.boroughId);
+    const delta = n.boroughId ? containerDelta('borough', n.boroughId) : 0;
     return { ...n, health: updateNeighborhood(n, delta, s) };
   });
 
@@ -172,7 +171,7 @@ function advanceDay(state: CityState, input: DayInput): CityState {
     landmarks,
     boroughs,
     neighborhoods,
-    districts: districtsHD,
+    districts: state.districts,
   };
 
   next.districts = next.districts.map((d) => {
@@ -254,10 +253,16 @@ export function updateHabit(
 
 // ---- District / Borough authoring (add + rename only; no removal) ----
 
+/**
+ * Add a district plus its mandatory "General" starter borough (every district
+ * has ≥1 borough). The district seeds no direct buildings; the General borough
+ * carries them, so every building lives under a borough — mirroring the v7
+ * migration's end state.
+ */
 export function addDistrict(
   state: CityState,
   opts: { name: string; description?: string },
-): { state: CityState; districtId: string } {
+): { state: CityState; districtId: string; boroughId: string } {
   const districtId = `district-${state.districts.length + 1}`;
   const district: District = {
     id: districtId,
@@ -267,15 +272,9 @@ export function addDistrict(
     maturity: 0,
     features: [],
   };
-  const neighborhoods = neighborhoodsForDistrict(district, state.settings.baseSpread, state.day);
-  return {
-    state: {
-      ...state,
-      districts: [...state.districts, district],
-      neighborhoods: [...state.neighborhoods, ...neighborhoods],
-    },
-    districtId,
-  };
+  const withDistrict: CityState = { ...state, districts: [...state.districts, district] };
+  const { state: withBorough, boroughId } = addBorough(withDistrict, { districtId, name: 'General' });
+  return { state: withBorough, districtId, boroughId };
 }
 
 export function renameDistrict(
@@ -350,13 +349,13 @@ export function removeMilestone(state: CityState, id: string): CityState {
 
 export function addLandmark(
   state: CityState,
-  opts: { districtId: string; boroughId?: string | null; name: string; condition?: number; attachHabitIds?: string[] },
+  opts: { districtId: string; boroughId: string; name: string; condition?: number; attachHabitIds?: string[] },
 ): { state: CityState; landmarkId: string } {
   const landmarkId = `landmark-${state.landmarks.length + 1}`;
   const landmark: Landmark = {
     id: landmarkId,
     districtId: opts.districtId,
-    boroughId: opts.boroughId ?? null,
+    boroughId: opts.boroughId,
     name: opts.name,
     condition: opts.condition ?? 0.5,
     tier: 0,
@@ -378,16 +377,13 @@ export function renameLandmark(state: CityState, id: string, name: string): City
 }
 
 /**
- * Remove a landmark, re-homing any habits attached to it onto its parent
- * container (its borough if it had one, else its district) so no habit is
- * orphaned to a dead target.
+ * Remove a landmark, re-homing any habits attached to it onto its borough
+ * (a landmark always has one) so no habit is orphaned to a dead target.
  */
 export function removeLandmark(state: CityState, id: string): CityState {
   const lm = state.landmarks.find((l) => l.id === id);
   if (!lm) return state;
-  const target = lm.boroughId
-    ? { kind: 'borough' as const, id: lm.boroughId }
-    : { kind: 'district' as const, id: lm.districtId };
+  const target = { kind: 'borough' as const, id: lm.boroughId };
   return {
     ...state,
     landmarks: state.landmarks.filter((l) => l.id !== id),

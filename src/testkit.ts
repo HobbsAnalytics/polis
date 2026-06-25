@@ -74,6 +74,9 @@ class Expectation {
   toBeNull() {
     assert.strictEqual(this.actual, null);
   }
+  toBeTruthy() {
+    assert.ok(this.actual, `expected ${JSON.stringify(this.actual)} to be truthy`);
+  }
   toHaveLength(n: number) {
     assert.strictEqual((this.actual as { length: number }).length, n);
   }

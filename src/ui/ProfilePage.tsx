@@ -1,10 +1,15 @@
 import { useState } from 'react';
-import type { CityState, Milestone, Profile } from '../engine/types.ts';
-import { weekIndex } from '../engine/dates.ts';
+import type { SelectHTMLAttributes } from 'react';
+import type { Borough, CityState, District, Habit, HabitKind, HabitTargetKind, Landmark, Milestone, Profile } from '../engine/types.ts';
+import { weekIndex, dayDiffISO } from '../engine/dates.ts';
 import { formatDate } from './format.ts';
-import { HabitCatalog } from './HabitCatalog.tsx';
-import type { NewHabitFields } from './HabitCatalog.tsx';
-import { NewLandmark } from './NewLandmark.tsx';
+
+export interface NewHabitFields {
+  name: string;
+  kind: HabitKind;
+  weight: number;
+  target: { kind: HabitTargetKind; id: string };
+}
 
 interface Props {
   city: CityState;
@@ -15,7 +20,7 @@ interface Props {
   onRequestRemoval: (id: string) => void;
   onCancelRemoval: (id: string) => void;
   onConfirmRemoval: (id: string) => void;
-  onCreateLandmark: (districtId: string, boroughId: string | null, name: string, attachHabitIds: string[]) => void;
+  onCreateLandmark: (districtId: string, boroughId: string, name: string) => void;
   onRenameLandmark: (id: string, name: string) => void;
   onRemoveLandmark: (id: string) => void;
   onAddDistrict: (name: string, description: string) => void;
@@ -24,6 +29,26 @@ interface Props {
   onRenameBorough: (id: string, name: string) => void;
   onAddMilestone: (label: string, dateISO: string) => void;
   onRemoveMilestone: (id: string) => void;
+}
+
+/** Shared callbacks + context threaded down the city tree. */
+interface TreeCtx {
+  city: CityState;
+  today: string;
+  cooldownDays: number;
+  open: Set<string>;
+  onToggle: (id: string) => void;
+  onCreateHabit: Props['onCreateHabit'];
+  onUpdateHabit: Props['onUpdateHabit'];
+  onRequestRemoval: Props['onRequestRemoval'];
+  onCancelRemoval: Props['onCancelRemoval'];
+  onConfirmRemoval: Props['onConfirmRemoval'];
+  onCreateLandmark: Props['onCreateLandmark'];
+  onRenameLandmark: Props['onRenameLandmark'];
+  onRemoveLandmark: Props['onRemoveLandmark'];
+  onRenameDistrict: Props['onRenameDistrict'];
+  onAddBorough: Props['onAddBorough'];
+  onRenameBorough: Props['onRenameBorough'];
 }
 
 // ---- Identity ----
@@ -67,174 +92,434 @@ function IdentitySection({ profile, onSetProfile }: { profile: Profile; onSetPro
   );
 }
 
-// ---- Districts ----
+// ---- Importance dropdown (shared) ----
 
-function DistrictsSection({
-  city,
-  onAddDistrict,
-  onRenameDistrict,
-}: Pick<Props, 'city' | 'onAddDistrict' | 'onRenameDistrict'>) {
+/** How much a habit matters → its numeric weight in the simulation. */
+const IMPORTANCE: { weight: number; label: string }[] = [
+  { weight: 1, label: 'Somewhat important' },
+  { weight: 2, label: 'Important' },
+  { weight: 3, label: 'Very important' },
+];
+
+function ImportanceSelect({
+  value,
+  onChange,
+  ...rest
+}: {
+  value: number;
+  onChange: (weight: number) => void;
+} & Omit<SelectHTMLAttributes<HTMLSelectElement>, 'value' | 'onChange'>) {
+  // Clamp legacy weights >3 onto "Very important" for display, without rewriting them.
+  return (
+    <select value={Math.min(3, Math.max(1, value))} onChange={(e) => onChange(Number(e.target.value))} {...rest}>
+      {IMPORTANCE.map((o) => (
+        <option key={o.weight} value={o.weight}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+// ---- Habit row (rename / reweight / remove + cooldown), reused under borough & landmark ----
+
+function HabitRow({ habit, t }: { habit: Habit; t: TreeCtx }) {
+  const pending = habit.pendingRemovalSinceISO;
+  const daysLeft = pending ? t.cooldownDays - dayDiffISO(pending, t.today) : 0;
+  return (
+    <div className="habit-row">
+      <div className="habit-edit">
+        <input
+          className="inline-edit"
+          value={habit.name}
+          aria-label="Habit name"
+          onChange={(e) => t.onUpdateHabit(habit.id, { name: e.target.value })}
+        />
+        <span className={`badge ${habit.kind === 'bad' ? 'tcond-onfire' : 'tcond-pristine'}`}>{habit.kind}</span>
+        <ImportanceSelect
+          className="weight-edit"
+          value={habit.weight}
+          aria-label="Habit importance"
+          onChange={(weight) => t.onUpdateHabit(habit.id, { weight })}
+        />
+      </div>
+      {pending ? (
+        <div className="removal">
+          <p className="note-warn" style={{ margin: 0 }}>
+            Marked for removal.{' '}
+            {daysLeft > 0
+              ? `Come back in ${daysLeft} day${daysLeft === 1 ? '' : 's'} to confirm.`
+              : 'You can confirm now.'}
+          </p>
+          <div className="dev-buttons">
+            <button className="btn" disabled={daysLeft > 0} onClick={() => t.onConfirmRemoval(habit.id)}>
+              Confirm removal
+            </button>
+            <button className="btn" onClick={() => t.onCancelRemoval(habit.id)}>
+              Keep it
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button className="btn" onClick={() => t.onRequestRemoval(habit.id)}>
+          Remove
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ---- Add-habit inline form (borough or landmark target) ----
+
+function AddHabitForm({
+  targetKind,
+  targetId,
+  onCreateHabit,
+  onClose,
+}: {
+  targetKind: HabitTargetKind;
+  targetId: string;
+  onCreateHabit: Props['onCreateHabit'];
+  onClose: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [kind, setKind] = useState<HabitKind>('good');
+  const [weight, setWeight] = useState(1);
+  const [error, setError] = useState('');
+
+  function submit() {
+    if (!name.trim()) return setError('Name the habit.');
+    onCreateHabit({ name: name.trim(), kind, weight, target: { kind: targetKind, id: targetId } });
+    onClose();
+  }
+
+  return (
+    <div className="add-form">
+      <div className="form-grid">
+        <label className="field">
+          Habit name
+          <input
+            name="habitName"
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Didn't drink"
+          />
+        </label>
+        <label className="field">
+          Kind
+          <select name="habitKind" value={kind} onChange={(e) => setKind(e.target.value as HabitKind)}>
+            <option value="good">good</option>
+            <option value="bad">bad</option>
+          </select>
+        </label>
+        <label className="field">
+          Importance
+          <ImportanceSelect value={weight} onChange={setWeight} name="habitWeight" />
+        </label>
+      </div>
+      {error && <p className="note-warn">{error}</p>}
+      <div className="tree-actions">
+        <button onClick={submit} className="btn btn-sm btn-primary">
+          Add habit
+        </button>
+        <button onClick={onClose} className="btn btn-sm">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---- Landmark node ----
+
+function LandmarkNode({ landmark, t }: { landmark: Landmark; t: TreeCtx }) {
+  const [adding, setAdding] = useState(false);
+  const habits = t.city.habits.filter((h) => h.target.kind === 'landmark' && h.target.id === landmark.id);
+  return (
+    <div className="tree-landmark">
+      <div className="tree-row">
+        <span className="tree-leaf" aria-hidden="true">
+          📍
+        </span>
+        <input
+          className="inline-edit"
+          value={landmark.name}
+          aria-label="Landmark name"
+          onChange={(e) => t.onRenameLandmark(landmark.id, e.target.value)}
+        />
+        <button className="btn btn-sm" onClick={() => setAdding((a) => !a)}>
+          + Add Habit
+        </button>
+        <button className="btn btn-sm" onClick={() => t.onRemoveLandmark(landmark.id)}>
+          Remove
+        </button>
+      </div>
+      {adding && (
+        <AddHabitForm targetKind="landmark" targetId={landmark.id} onCreateHabit={t.onCreateHabit} onClose={() => setAdding(false)} />
+      )}
+      {habits.length > 0 && (
+        <div className="habit-list">
+          {habits.map((h) => (
+            <HabitRow key={h.id} habit={h} t={t} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- Borough node ----
+
+function BoroughNode({ borough, t }: { borough: Borough; t: TreeCtx }) {
+  const [addingHabit, setAddingHabit] = useState(false);
+  const [addingLm, setAddingLm] = useState(false);
+  const [lmName, setLmName] = useState('');
+  const [lmError, setLmError] = useState('');
+
+  const isOpen = t.open.has(borough.id);
+  const habits = t.city.habits.filter((h) => h.target.kind === 'borough' && h.target.id === borough.id);
+  const landmarks = t.city.landmarks.filter((l) => l.boroughId === borough.id);
+
+  function addLandmark() {
+    if (!lmName.trim()) return setLmError('Name the landmark.');
+    t.onCreateLandmark(borough.districtId, borough.id, lmName.trim());
+    setLmName('');
+    setLmError('');
+    setAddingLm(false);
+  }
+
+  return (
+    <div className="tree-borough">
+      <div className="tree-row">
+        <button className="tree-toggle" aria-label={isOpen ? 'Collapse borough' : 'Expand borough'} onClick={() => t.onToggle(borough.id)}>
+          {isOpen ? '▾' : '▸'}
+        </button>
+        <input
+          className="inline-edit"
+          value={borough.name}
+          aria-label="Borough name"
+          onChange={(e) => t.onRenameBorough(borough.id, e.target.value)}
+        />
+        <span className="tier">
+          {landmarks.length} landmark{landmarks.length === 1 ? '' : 's'} · {habits.length} habit{habits.length === 1 ? '' : 's'}
+        </span>
+      </div>
+
+      {isOpen && (
+        <div className="tree-children">
+          <div className="tree-actions">
+            <button className="btn btn-sm" onClick={() => setAddingHabit((a) => !a)}>
+              + Add Habit
+            </button>
+            <button className="btn btn-sm" onClick={() => setAddingLm((a) => !a)}>
+              + Add Landmark
+            </button>
+          </div>
+
+          {addingHabit && (
+            <AddHabitForm targetKind="borough" targetId={borough.id} onCreateHabit={t.onCreateHabit} onClose={() => setAddingHabit(false)} />
+          )}
+          {addingLm && (
+            <div className="add-form">
+              <div className="add-inline">
+                <input
+                  className="inline-edit"
+                  autoFocus
+                  value={lmName}
+                  placeholder="e.g. Sobriety Cathedral"
+                  aria-label="New landmark name"
+                  onChange={(e) => setLmName(e.target.value)}
+                />
+                <button className="btn btn-sm btn-primary" onClick={addLandmark}>
+                  Add landmark
+                </button>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => {
+                    setAddingLm(false);
+                    setLmName('');
+                    setLmError('');
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+              {lmError && <p className="note-warn">{lmError}</p>}
+            </div>
+          )}
+
+          {habits.length > 0 && (
+            <div className="habit-list">
+              {habits.map((h) => (
+                <HabitRow key={h.id} habit={h} t={t} />
+              ))}
+            </div>
+          )}
+
+          {landmarks.map((l) => (
+            <LandmarkNode key={l.id} landmark={l} t={t} />
+          ))}
+          {habits.length === 0 && landmarks.length === 0 && <p className="abandoned">empty — add a habit or a landmark</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- District node ----
+
+function DistrictNode({ district, t }: { district: District; t: TreeCtx }) {
+  const [addingBorough, setAddingBorough] = useState(false);
+  const [boroughName, setBoroughName] = useState('');
+  const [error, setError] = useState('');
+
+  const isOpen = t.open.has(district.id);
+  const boroughs = t.city.boroughs.filter((b) => b.districtId === district.id);
+
+  function addBorough() {
+    if (!boroughName.trim()) return setError('Name the borough.');
+    t.onAddBorough(district.id, boroughName.trim());
+    setBoroughName('');
+    setError('');
+    setAddingBorough(false);
+  }
+
+  return (
+    <div className="tree-district">
+      <div className="tree-row">
+        <button className="tree-toggle" aria-label={isOpen ? 'Collapse district' : 'Expand district'} onClick={() => t.onToggle(district.id)}>
+          {isOpen ? '▾' : '▸'}
+        </button>
+        <input
+          className="inline-edit"
+          value={district.name}
+          aria-label="District name"
+          onChange={(e) => t.onRenameDistrict(district.id, { name: e.target.value })}
+        />
+        <input
+          className="inline-edit inline-edit-desc"
+          value={district.description}
+          placeholder="short description"
+          aria-label="District description"
+          onChange={(e) => t.onRenameDistrict(district.id, { description: e.target.value })}
+        />
+        <span className="tier">
+          {boroughs.length} borough{boroughs.length === 1 ? '' : 's'}
+        </span>
+      </div>
+
+      {isOpen && (
+        <div className="tree-children">
+          {boroughs.map((b) => (
+            <BoroughNode key={b.id} borough={b} t={t} />
+          ))}
+          <div className="tree-actions">
+            {addingBorough ? (
+              <div className="add-form" style={{ width: '100%' }}>
+                <div className="add-inline">
+                  <input
+                    className="inline-edit"
+                    autoFocus
+                    value={boroughName}
+                    placeholder="e.g. Sleep"
+                    aria-label="New borough name"
+                    onChange={(e) => setBoroughName(e.target.value)}
+                  />
+                  <button className="btn btn-sm btn-primary" onClick={addBorough}>
+                    Add borough
+                  </button>
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => {
+                      setAddingBorough(false);
+                      setBoroughName('');
+                      setError('');
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {error && <p className="note-warn">{error}</p>}
+              </div>
+            ) : (
+              <button className="btn btn-sm" onClick={() => setAddingBorough(true)}>
+                + Add Borough
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- The city tree ----
+
+function CityTree({ t, onAddDistrict }: { t: TreeCtx; onAddDistrict: Props['onAddDistrict'] }) {
+  const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState('');
 
-  function submit() {
+  function addDistrict() {
     if (!name.trim()) return setError('Name the district.');
-    setError('');
     onAddDistrict(name.trim(), description.trim());
     setName('');
     setDescription('');
-  }
-
-  return (
-    <div className="panel">
-      <h2>Districts</h2>
-      <p className="muted">Your wellbeing domains — each is a neighborhood on the map.</p>
-
-      <div className="habit-list">
-        {city.districts.map((d) => (
-          <div key={d.id} className="district-edit-row">
-            <input
-              className="inline-edit"
-              value={d.name}
-              aria-label="District name"
-              onChange={(e) => onRenameDistrict(d.id, { name: e.target.value })}
-            />
-            <input
-              className="inline-edit inline-edit-desc"
-              value={d.description}
-              placeholder="short description"
-              aria-label="District description"
-              onChange={(e) => onRenameDistrict(d.id, { description: e.target.value })}
-            />
-          </div>
-        ))}
-        {city.districts.length === 0 && <p className="abandoned">no districts yet</p>}
-      </div>
-
-      <div className="form-grid" style={{ marginTop: '0.75rem' }}>
-        <label className="field">
-          New district
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Health" />
-        </label>
-        <label className="field">
-          Description
-          <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="optional" />
-        </label>
-      </div>
-      {error && <p className="note-warn">{error}</p>}
-      <button onClick={submit} className="btn-primary" style={{ marginTop: '0.5rem' }}>
-        Add district
-      </button>
-    </div>
-  );
-}
-
-// ---- Boroughs ----
-
-function BoroughsSection({
-  city,
-  onAddBorough,
-  onRenameBorough,
-}: Pick<Props, 'city' | 'onAddBorough' | 'onRenameBorough'>) {
-  const [districtId, setDistrictId] = useState(city.districts[0]?.id ?? '');
-  const [name, setName] = useState('');
-  const [error, setError] = useState('');
-
-  const districtName = (id: string) => city.districts.find((d) => d.id === id)?.name ?? '—';
-
-  function submit() {
-    if (!districtId) return setError('Create a district first.');
-    if (!name.trim()) return setError('Name the borough.');
     setError('');
-    onAddBorough(districtId, name.trim());
-    setName('');
+    setAdding(false);
   }
 
   return (
     <div className="panel">
-      <h2>Boroughs</h2>
-      <p className="muted">Optional sub-areas within a district.</p>
+      <h2>Your city</h2>
+      <p className="muted">
+        Expand a district to manage its boroughs, landmarks, and habits. Every district keeps at least one borough; new
+        districts start with a "General" borough. Habits attach to a borough or a landmark.
+      </p>
 
-      <div className="habit-list">
-        {city.boroughs.map((b) => (
-          <div key={b.id} className="district-edit-row">
-            <input
-              className="inline-edit"
-              value={b.name}
-              aria-label="Borough name"
-              onChange={(e) => onRenameBorough(b.id, e.target.value)}
-            />
-            <span className="tier">in {districtName(b.districtId)}</span>
-          </div>
-        ))}
-        {city.boroughs.length === 0 && <p className="abandoned">no boroughs yet</p>}
-      </div>
+      {t.city.districts.map((d) => (
+        <DistrictNode key={d.id} district={d} t={t} />
+      ))}
+      {t.city.districts.length === 0 && <p className="abandoned">no districts yet</p>}
 
-      <div className="form-grid" style={{ marginTop: '0.75rem' }}>
-        <label className="field">
-          District
-          <select value={districtId} onChange={(e) => setDistrictId(e.target.value)}>
-            {city.districts.length === 0 ? (
-              <option value="">(create a district first)</option>
-            ) : (
-              city.districts.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))
-            )}
-          </select>
-        </label>
-        <label className="field">
-          New borough
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sleep" />
-        </label>
-      </div>
-      {error && <p className="note-warn">{error}</p>}
-      <button onClick={submit} className="btn-primary" style={{ marginTop: '0.5rem' }}>
-        Add borough
-      </button>
-    </div>
-  );
-}
-
-// ---- Landmarks (manage existing: rename / remove) ----
-
-function LandmarksManager({
-  city,
-  onRenameLandmark,
-  onRemoveLandmark,
-}: Pick<Props, 'city' | 'onRenameLandmark' | 'onRemoveLandmark'>) {
-  const place = (districtId: string, boroughId: string | null) => {
-    const d = city.districts.find((x) => x.id === districtId)?.name ?? '—';
-    const b = boroughId ? city.boroughs.find((x) => x.id === boroughId)?.name : null;
-    return b ? `${d} › ${b}` : d;
-  };
-
-  if (city.landmarks.length === 0) return null;
-
-  return (
-    <div className="panel">
-      <h2>Manage landmarks</h2>
-      <p className="muted">Rename a landmark or remove it (its habits move up to the parent area).</p>
-      <div className="habit-list">
-        {city.landmarks.map((lm) => (
-          <div key={lm.id} className="habit-row">
-            <div className="habit-edit">
-              <input
-                className="inline-edit"
-                value={lm.name}
-                aria-label="Landmark name"
-                onChange={(e) => onRenameLandmark(lm.id, e.target.value)}
-              />
-              <span className="tier">{place(lm.districtId, lm.boroughId)}</span>
+      <div className="tree-actions" style={{ marginTop: '0.75rem' }}>
+        {adding ? (
+          <div className="add-form" style={{ width: '100%' }}>
+            <div className="form-grid">
+              <label className="field">
+                New district
+                <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Health" />
+              </label>
+              <label className="field">
+                Description
+                <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="optional" />
+              </label>
             </div>
-            <button className="btn" onClick={() => onRemoveLandmark(lm.id)}>
-              Remove
-            </button>
+            {error && <p className="note-warn">{error}</p>}
+            <div className="tree-actions">
+              <button className="btn btn-sm btn-primary" onClick={addDistrict}>
+                Add district
+              </button>
+              <button
+                className="btn btn-sm"
+                onClick={() => {
+                  setAdding(false);
+                  setName('');
+                  setDescription('');
+                  setError('');
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
-        ))}
+        ) : (
+          <button className="btn btn-primary" onClick={() => setAdding(true)}>
+            + Add District
+          </button>
+        )}
       </div>
     </div>
   );
@@ -309,39 +594,46 @@ function MilestonesSection({
 
 export function ProfilePage(props: Props) {
   const { city, today } = props;
+  const [open, setOpen] = useState<Set<string>>(() => new Set(city.districts.map((d) => d.id)));
+  const onToggle = (id: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const t: TreeCtx = {
+    city,
+    today,
+    cooldownDays: city.settings.removalCooldownDays,
+    open,
+    onToggle,
+    onCreateHabit: props.onCreateHabit,
+    onUpdateHabit: props.onUpdateHabit,
+    onRequestRemoval: props.onRequestRemoval,
+    onCancelRemoval: props.onCancelRemoval,
+    onConfirmRemoval: props.onConfirmRemoval,
+    onCreateLandmark: props.onCreateLandmark,
+    onRenameLandmark: props.onRenameLandmark,
+    onRemoveLandmark: props.onRemoveLandmark,
+    onRenameDistrict: props.onRenameDistrict,
+    onAddBorough: props.onAddBorough,
+    onRenameBorough: props.onRenameBorough,
+  };
+
   return (
     <div>
       <div className="panel" style={{ marginBottom: '1rem' }}>
         <h2>Profile</h2>
         <p className="muted">
-          The one place to define your world — identity, districts, boroughs, habits, landmarks, and
+          The one place to define your world — identity, the district › borough › landmark tree with its habits, and
           important dates. Every other page just reflects what you set here.
         </p>
       </div>
 
       <IdentitySection profile={city.profile} onSetProfile={props.onSetProfile} />
-      <DistrictsSection city={city} onAddDistrict={props.onAddDistrict} onRenameDistrict={props.onRenameDistrict} />
-      <BoroughsSection city={city} onAddBorough={props.onAddBorough} onRenameBorough={props.onRenameBorough} />
-      <HabitCatalog
-        habits={city.habits}
-        districts={city.districts}
-        boroughs={city.boroughs}
-        landmarks={city.landmarks}
-        today={today}
-        cooldownDays={city.settings.removalCooldownDays}
-        onCreateHabit={props.onCreateHabit}
-        onUpdateHabit={props.onUpdateHabit}
-        onRequestRemoval={props.onRequestRemoval}
-        onCancelRemoval={props.onCancelRemoval}
-        onConfirmRemoval={props.onConfirmRemoval}
-      />
-      <NewLandmark
-        districts={city.districts.map((d) => ({ id: d.id, name: d.name }))}
-        boroughs={city.boroughs}
-        habits={city.habits}
-        onCreate={props.onCreateLandmark}
-      />
-      <LandmarksManager city={city} onRenameLandmark={props.onRenameLandmark} onRemoveLandmark={props.onRemoveLandmark} />
+      <CityTree t={t} onAddDistrict={props.onAddDistrict} />
       <MilestonesSection city={city} onAddMilestone={props.onAddMilestone} onRemoveMilestone={props.onRemoveMilestone} />
     </div>
   );
