@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Polis — Patina concept</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@1,6..72,400;0,6..72,400&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --limestone: #E7E9E4;
+    --paper:     #F3F4F0;
+    --ink:       #232B28;
+    --ink-2:     #5C665F;
+    --line:      #C9CEC6;
+    --verdigris: #5F8E78;
+    --oxide:     #B0674C;
+    --sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    --serif: "Newsreader", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--limestone); color: var(--ink); font-family: var(--sans);
+    -webkit-font-smoothing: antialiased; line-height: 1.5;
+    background-image: linear-gradient(180deg, #ECEEE9 0%, var(--limestone) 38%);
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 34px 40px 56px; }
+
+  .topbar {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  .wordmark { font-weight: 600; font-size: 25px; letter-spacing: 0.16em; text-transform: uppercase; margin: 0; }
+  .epigraph { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink-2); }
+  .utility { font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em; color: var(--ink-2); white-space: nowrap; }
+  .utility .dot { color: var(--verdigris); }
+
+  .stage { display: grid; grid-template-columns: 1fr 248px; gap: 40px; margin-top: 36px; align-items: start; }
+  .map-card {
+    background: var(--paper); border: 1px solid var(--line); border-radius: 4px;
+    padding: 30px 26px 22px; box-shadow: 0 1px 2px rgba(35,43,40,0.05); position: relative;
+  }
+  .map-card .caption {
+    position: absolute; top: 14px; left: 18px; font-family: var(--mono);
+    font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2);
+  }
+  svg.city { width: 100%; height: auto; display: block; }
+
+  .rail-h { font-family: var(--mono); font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-2); margin: 6px 0 16px; }
+  .district { padding: 12px 10px; margin: 0 -10px; border-radius: 3px; border-top: 1px solid var(--line); cursor: pointer; transition: background 140ms ease; }
+  .district:first-of-type { border-top: none; }
+  .district.active { background: #E2E5DF; }
+  .tile-g { transition: opacity 170ms ease; cursor: pointer; }
+  .district .row1 { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+  .pip { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .dname { font-weight: 500; font-size: 15px; letter-spacing: 0.01em; }
+  .dpct { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+  .bar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 2px; }
+
+  .cta {
+    margin-top: 26px; width: 100%; font-family: var(--sans); font-size: 14px; font-weight: 500;
+    letter-spacing: 0.02em; color: var(--ink); background: transparent; border: 1px solid var(--ink);
+    border-radius: 3px; padding: 11px 14px; cursor: pointer; transition: background 140ms ease, color 140ms ease;
+  }
+  .cta:hover { background: var(--ink); color: var(--paper); }
+  .cta:focus-visible { outline: 2px solid var(--verdigris); outline-offset: 2px; }
+  .cta .arr { float: right; }
+
+  .studio {
+    margin-top: 30px; background: var(--paper); border: 1px solid var(--line);
+    border-radius: 4px; padding: 20px 26px 24px;
+  }
+  .tiles { display: flex; gap: 30px; flex-wrap: wrap; align-items: flex-end; }
+  .tile { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+  .tile svg { display: block; }
+  .tcap { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--ink-2); }
+
+  .legend {
+    margin-top: 30px; padding-top: 16px; border-top: 1px solid var(--line); display: flex;
+    align-items: center; gap: 18px; flex-wrap: wrap; font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2);
+  }
+  .ramp { display: flex; height: 9px; width: 168px; border-radius: 2px; overflow: hidden; border: 1px solid var(--line); }
+  .ramp > i { flex: 1; }
+  .legmark { font-family: var(--sans); }
+
+  .fade { opacity: 0; transform: translateY(6px); animation: rise 700ms cubic-bezier(.2,.7,.2,1) forwards; }
+  .fade.d1 { animation-delay: 60ms; }
+  .fade.d2 { animation-delay: 150ms; }
+  .fade.d3 { animation-delay: 230ms; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .fade { animation: none; opacity: 1; transform: none; } .tile-g, .district { transition: none; } }
+
+  @media (max-width: 760px) {
+    .wrap { padding: 24px 20px 40px; }
+    .stage { grid-template-columns: 1fr; gap: 28px; }
+    .topbar { flex-direction: column; gap: 10px; }
+    .tiles { gap: 20px; justify-content: space-between; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar fade">
+      <div class="brand">
+        <h1 class="wordmark">Polis</h1>
+        <span class="epigraph">the shape of how you&rsquo;ve been living</span>
+      </div>
+      <div class="utility">DAY&nbsp;142 <span class="dot">&middot;</span> 23&nbsp;JUN &middot; dusk</div>
+    </header>
+
+    <main class="stage">
+      <section class="map-card fade d1">
+        <span class="caption">the city &middot; one place, five districts</span>
+        <svg id="city" class="city" role="img" aria-label="Hex city map of drawn buildings, tinted by condition"></svg>
+      </section>
+
+      <aside class="rail fade d2">
+        <div class="rail-h">Districts</div>
+        <div id="rail"></div>
+        <button class="cta">Log today <span class="arr">&rarr;</span></button>
+      </aside>
+    </main>
+
+    <section class="studio fade d3">
+      <div class="rail-h" style="margin-bottom:16px">Tile studio &middot; one building, weathering</div>
+      <div class="tiles" id="studio"></div>
+    </section>
+
+    <footer class="legend fade d3">
+      <span>weathered</span>
+      <span class="ramp" id="ramp" aria-hidden="true"></span>
+      <span>thriving</span>
+      <span class="legmark">&#9650;&nbsp; landmark</span>
+    </footer>
+  </div>
+
+<script>
+const S = 18;
+const INK = '#232B28';
+const DIRS = [[1,0],[0,1],[-1,1],[-1,0],[0,-1],[1,-1]];
+function hexSpiral(n){
+  const out=[]; if(n<=0) return out; out.push({q:0,r:0}); let k=1;
+  while(out.length<n){
+    let q=DIRS[4][0]*k, r=DIRS[4][1]*k;
+    for(let side=0; side<6 && out.length<n; side++){
+      for(let step=0; step<k && out.length<n; step++){ out.push({q,r}); q+=DIRS[side][0]; r+=DIRS[side][1]; }
+    } k++;
+  } return out;
+}
+const px = (a)=>({x:S*Math.sqrt(3)*(a.q+a.r/2), y:S*1.5*a.r});
+const cornerAt = (i,s)=>{ const ang=Math.PI/180*(60*i-30); return {x:s*Math.cos(ang), y:s*Math.sin(ang)}; };
+const corner = (i)=>cornerAt(i,S);
+const hexPtsAt = (s)=>Array.from({length:6},(_,i)=>{const c=cornerAt(i,s);return `${c.x.toFixed(2)},${c.y.toFixed(2)}`;}).join(' ');
+
+const STOPS = [[0,[110,99,91]],[0.22,[171,107,80]],[0.46,[185,182,166]],[0.63,[157,179,159]],[1,[95,142,120]]];
+function ramp(h){
+  h = Math.max(0, Math.min(1, h));
+  for(let i=1;i<STOPS.length;i++){
+    if(h<=STOPS[i][0]){
+      const [t0,c0]=STOPS[i-1], [t1,c1]=STOPS[i];
+      const f=(h-t0)/(t1-t0);
+      const c=c0.map((v,j)=>Math.round(v+(c1[j]-v)*f));
+      return `rgb(${c[0]},${c[1]},${c[2]})`;
+    }
+  }
+  const c=STOPS[STOPS.length-1][1]; return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+// ---- drawn building: a small line illustration, weathering with health ----
+// One visual contract for future tile art: ink line on the tile's patina ground,
+// detail/integrity falls away as health drops (pristine -> worn -> crumbling -> ruin).
+function building(h, seed, s, forceType){
+  const r = (Math.sin(seed*127.1)*43758.5453) % 1; const rnd = r - Math.floor(r);
+  const type = forceType!=null ? forceType : Math.floor(Math.abs(rnd)*3);
+  const sw = (s*0.072).toFixed(2);
+  const wall = 'rgba(35,43,40,0.06)';
+  const lvl = h>0.75?4 : h>0.55?3 : h>0.38?2 : h>0.18?1 : 0;
+  const base = s*0.5;
+  const P = (n)=>n.toFixed(1);
+
+  if(lvl===0){
+    let d='';
+    d+=`M${P(-s*0.46)},${P(base)}L${P(-s*0.24)},${P(base)}`;
+    d+=`M${P(-s*0.16)},${P(base)}L${P(-s*0.16)},${P(base-s*0.18)}L${P(-s*0.02)},${P(base)}`;
+    d+=`M${P(s*0.05)},${P(base)}L${P(s*0.2)},${P(base-s*0.12)}L${P(s*0.33)},${P(base)}`;
+    return `<path d="${d}" fill="none" stroke="${INK}" stroke-opacity="0.55" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+
+  let g='';
+  if(type===0){ // gabled house
+    const w=s*0.9, top=lvl<=1?-s*0.02:-s*0.06, apex=lvl<=1?-s*0.34:-s*0.62;
+    g+=`<path d="M${P(-w/2)},${P(base)} L${P(-w/2)},${P(top)} L${P(w/2)},${P(top)} L${P(w/2)},${P(base)} Z" fill="${wall}" stroke="${INK}" stroke-opacity="0.72" stroke-width="${sw}" stroke-linejoin="round"/>`;
+    if(lvl>=2){
+      g+=`<path d="M${P(-w/2*1.14)},${P(top)} L0,${P(apex)} L${P(w/2*1.14)},${P(top)}" fill="none" stroke="${INK}" stroke-opacity="0.72" stroke-width="${sw}" stroke-linejoin="round"/>`;
+    } else {
+      g+=`<path d="M${P(-w/2*1.06)},${P(top)} L${P(-w*0.16)},${P(apex*0.78)}" fill="none" stroke="${INK}" stroke-opacity="0.6" stroke-width="${sw}" stroke-linecap="round"/>`;
+      g+=`<path d="M${P(w/2*1.06)},${P(top)} L${P(w*0.14)},${P(apex*0.66)}" fill="none" stroke="${INK}" stroke-opacity="0.6" stroke-width="${sw}" stroke-linecap="round"/>`;
+    }
+    if(lvl>=4){
+      const dw=s*0.16, dh=s*0.26;
+      g+=`<path d="M${P(-dw/2)},${P(base)} L${P(-dw/2)},${P(base-dh)} L${P(dw/2)},${P(base-dh)} L${P(dw/2)},${P(base)}" fill="none" stroke="${INK}" stroke-opacity="0.5" stroke-width="${(sw*0.8).toFixed(2)}"/>`;
+    }
+  } else if(type===1){ // flat block
+    const w=s*1.04, top=lvl<=1?base-s*0.3:-s*0.26;
+    g+=`<path d="M${P(-w/2)},${P(base)} L${P(-w/2)},${P(top)} L${P(w/2)},${P(top)} L${P(w/2)},${P(base)} Z" fill="${wall}" stroke="${INK}" stroke-opacity="0.72" stroke-width="${sw}" stroke-linejoin="round"/>`;
+    if(lvl>=2) g+=`<path d="M${P(-w/2*1.1)},${P(top)} L${P(w/2*1.1)},${P(top)}" fill="none" stroke="${INK}" stroke-opacity="0.72" stroke-width="${sw}"/>`;
+    if(lvl>=4){
+      const wy=(top+base)/2 - s*0.02;
+      [-w*0.22, w*0.2].forEach(wx=>{ g+=`<rect x="${P(wx-s*0.07)}" y="${P(wy-s*0.08)}" width="${P(s*0.14)}" height="${P(s*0.16)}" fill="none" stroke="${INK}" stroke-opacity="0.42" stroke-width="${(sw*0.75).toFixed(2)}"/>`; });
+    }
+    if(lvl===1) g+=`<path d="M${P(w*0.06)},${P(top)} L${P(-w*0.03)},${P((top+base)/2)} L${P(w*0.05)},${P(base)}" fill="none" stroke="${INK}" stroke-opacity="0.4" stroke-width="${(sw*0.7).toFixed(2)}"/>`;
+  } else { // tower
+    const w=s*0.54, top=lvl<=1?-s*0.16:-s*0.66;
+    g+=`<path d="M${P(-w/2)},${P(base)} L${P(-w/2)},${P(top)} L${P(w/2)},${P(top)} L${P(w/2)},${P(base)} Z" fill="${wall}" stroke="${INK}" stroke-opacity="0.72" stroke-width="${sw}" stroke-linejoin="round"/>`;
+    if(lvl>=2) g+=`<path d="M${P(-w/2)},${P(top+(base-top)*0.34)} L${P(w/2)},${P(top+(base-top)*0.34)}" fill="none" stroke="${INK}" stroke-opacity="0.5" stroke-width="${(sw*0.8).toFixed(2)}"/>`;
+    if(lvl<=1) g+=`<path d="M${P(-w/2)},${P(top)} L${P(-w*0.12)},${P(top-s*0.1)} L${P(w*0.1)},${P(top)} L${P(w/2)},${P(top-s*0.05)}" fill="none" stroke="${INK}" stroke-opacity="0.58" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+  return g;
+}
+
+// ---- landmark: a small drawn monument (temple) ----
+function monument(s){
+  const sw=(s*0.075).toFixed(2); const base=s*0.46, top=-s*0.52;
+  let g='';
+  g+=`<path d="M${(-s*0.5).toFixed(1)},${base.toFixed(1)} L${(s*0.5).toFixed(1)},${base.toFixed(1)}" stroke="${INK}" stroke-opacity="0.8" stroke-width="${sw}" stroke-linecap="round"/>`;
+  [-s*0.3,0,s*0.3].forEach(cx=>{ g+=`<path d="M${cx.toFixed(1)},${base.toFixed(1)} L${cx.toFixed(1)},${(-s*0.16).toFixed(1)}" stroke="${INK}" stroke-opacity="0.8" stroke-width="${sw}"/>`; });
+  g+=`<path d="M${(-s*0.42).toFixed(1)},${(-s*0.16).toFixed(1)} L${(s*0.42).toFixed(1)},${(-s*0.16).toFixed(1)}" stroke="${INK}" stroke-opacity="0.8" stroke-width="${sw}"/>`;
+  g+=`<path d="M${(-s*0.46).toFixed(1)},${(-s*0.16).toFixed(1)} L0,${top.toFixed(1)} L${(s*0.46).toFixed(1)},${(-s*0.16).toFixed(1)}" fill="none" stroke="${INK}" stroke-opacity="0.85" stroke-width="${sw}" stroke-linejoin="round"/>`;
+  return g;
+}
+
+const DISTRICTS = [
+  { name:'Sleep', health:0.89, boroughs:[ {name:'Rest', tiles:[.95,.9,.93,.86,.9]}, {name:'Wind-down', tiles:[.82,.88,.8]} ], landmark:{tier:2,h:.92} },
+  { name:'Focus', health:0.91, boroughs:[ {name:'Deep work', tiles:[.92,.95,.88,.93,.86]}, {name:'Reading', tiles:[.82,.8,.85]} ], landmark:{tier:3,h:.94} },
+  { name:'Movement', health:0.62, boroughs:[ {name:'Cardio', tiles:[.6,.55,.7,.5]}, {name:'Strength', tiles:[.72,.64,.6]} ], landmark:{tier:1,h:.66} },
+  { name:'Stillness', health:0.49, boroughs:[ {name:'Breath', tiles:[.52,.46,.58]}, {name:'Journal', tiles:[.44,.5]} ], landmark:null },
+  { name:'Craft', health:0.24, boroughs:[ {name:'Practice', tiles:[.34,.26,.2,.4]}, {name:'Ship', tiles:[.16,.12,.3]} ], landmark:{tier:1,h:.18} },
+];
+
+const cells=[];
+DISTRICTS.forEach((d,di)=>{
+  d.boroughs.forEach((b,bi)=>{ b.tiles.forEach(h=> cells.push({di, dn:d.name, bk:di+':'+bi, kind:'generic', h})); });
+  if(d.landmark) cells.push({di, dn:d.name, bk:di+':0', kind:'landmark', h:d.landmark.h});
+});
+
+const pts = hexSpiral(cells.length).map(a=>({a,p:px(a)}))
+  .sort((u,v)=>{ const au=Math.atan2(u.p.y,u.p.x), av=Math.atan2(v.p.y,v.p.x); if(au!==av) return au-av; return (u.p.x*u.p.x+u.p.y*u.p.y)-(v.p.x*v.p.x+v.p.y*v.p.y); });
+cells.forEach((c,i)=>{ c.q=pts[i].a.q; c.r=pts[i].a.r; c.x=pts[i].p.x; c.y=pts[i].p.y; c.seed=i+3; });
+
+const minX=Math.min(...cells.map(c=>c.x))-S, minY=Math.min(...cells.map(c=>c.y))-S;
+cells.forEach(c=>{ c.x-=minX; c.y-=minY; });
+const W=Math.max(...cells.map(c=>c.x))+S, H=Math.max(...cells.map(c=>c.y))+S;
+const hexPts = hexPtsAt(S);
+
+function boundary(set){
+  const inset = new Set(set.map(c=>c.q+','+c.r)); let d='';
+  for(const c of set){
+    for(let k=0;k<6;k++){
+      const nb=(c.q+DIRS[k][0])+','+(c.r+DIRS[k][1]);
+      if(inset.has(nb)) continue;
+      const a=corner(k), b=corner((k+1)%6);
+      d+=`M${(c.x+a.x).toFixed(2)},${(c.y+a.y).toFixed(2)}L${(c.x+b.x).toFixed(2)},${(c.y+b.y).toFixed(2)}`;
+    }
+  } return d;
+}
+const centroid = (ts)=>({x:ts.reduce((a,t)=>a+t.x,0)/ts.length, y:ts.reduce((a,t)=>a+t.y,0)/ts.length});
+
+let svg='';
+for(const c of cells){
+  svg += `<g class="tile-g" data-di="${c.di}" transform="translate(${c.x.toFixed(2)},${c.y.toFixed(2)})">`;
+  svg += `<polygon points="${hexPts}" fill="${ramp(c.h)}" stroke="${INK}" stroke-opacity="0.14" stroke-width="0.6" />`;
+  svg += (c.kind==='landmark') ? monument(S) : building(c.h, c.seed, S);
+  svg += `</g>`;
+}
+const boroughKeys=[...new Set(cells.map(c=>c.bk))];
+for(const bk of boroughKeys){
+  const ts=cells.filter(c=>c.bk===bk);
+  svg += `<path d="${boundary(ts)}" fill="none" stroke="${INK}" stroke-opacity="0.12" stroke-width="1" stroke-dasharray="1.5 2.5" stroke-linejoin="round" />`;
+}
+DISTRICTS.forEach((d,di)=>{
+  const ts=cells.filter(c=>c.di===di); if(!ts.length) return;
+  svg += `<path d="${boundary(ts)}" fill="none" stroke="${INK}" stroke-opacity="0.46" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" />`;
+});
+svg += `<g id="focusLayer"></g>`;
+
+const el=document.getElementById('city');
+el.setAttribute('viewBox', `0 ${(-S*1.2).toFixed(1)} ${W.toFixed(1)} ${(H+S*1.4).toFixed(1)}`);
+el.innerHTML = svg;
+
+// ---- districts rail ----
+document.getElementById('rail').innerHTML = DISTRICTS.map((d,di)=>{
+  const col = ramp(d.health), pct = Math.round(d.health*100);
+  return `<div class="district" data-di="${di}"><div class="row1"><span class="pip" style="background:${col}"></span>`
+    + `<span class="dname">${d.name}</span><span class="dpct">${pct}</span></div>`
+    + `<div class="bar"><i style="width:${pct}%;background:${col}"></i></div></div>`;
+}).join('');
+
+// ---- focus a district: reveal its name + outline, quiet the rest, key the rail ----
+function setFocus(di){
+  document.querySelectorAll('.tile-g').forEach(g=>{ g.style.opacity = (di==null || +g.dataset.di===di) ? '1' : '0.28'; });
+  const fl=document.getElementById('focusLayer');
+  if(di==null){ fl.innerHTML=''; }
+  else {
+    const ts=cells.filter(c=>c.di===di); const ctr=centroid(ts);
+    fl.innerHTML = `<path d="${boundary(ts)}" fill="none" stroke="${INK}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>`
+      + `<text x="${ctr.x.toFixed(1)}" y="${ctr.y.toFixed(1)}" text-anchor="middle" dominant-baseline="central" `
+      + `font-family="Space Grotesk, sans-serif" font-size="${(S*0.56).toFixed(1)}" font-weight="600" letter-spacing="1.6" `
+      + `fill="${INK}" stroke="#F3F4F0" stroke-width="2.6" paint-order="stroke">${DISTRICTS[di].name.toUpperCase()}</text>`;
+  }
+  document.querySelectorAll('.district').forEach((el,i)=>el.classList.toggle('active', di===i));
+}
+document.querySelectorAll('.tile-g').forEach(g=> g.addEventListener('mouseenter', ()=>setFocus(+g.dataset.di)) );
+document.querySelector('.map-card').addEventListener('mouseleave', ()=>setFocus(null));
+document.querySelectorAll('.district').forEach(el=>{
+  el.addEventListener('mouseenter', ()=>setFocus(+el.dataset.di));
+  el.addEventListener('mouseleave', ()=>setFocus(null));
+});
+
+// ---- tile studio: one building, weathering ----
+function studioTile(h, kind){
+  const s=34;
+  const fill = kind==='landmark' ? ramp(0.82) : ramp(h);
+  let g = `<polygon points="${hexPtsAt(s)}" fill="${fill}" stroke="${INK}" stroke-opacity="0.16" stroke-width="0.9"/>`;
+  g += kind==='landmark' ? monument(s) : building(h, 2, s, 0);
+  return `<svg viewBox="-40 -42 80 80" width="92" height="92" aria-hidden="true">${g}</svg>`;
+}
+const STAGES=[['PRISTINE',.92],['WORN',.66],['CRUMBLING',.44],['FAILING',.26],['RUIN',.10]];
+let sh = STAGES.map(([lab,h])=>`<div class="tile">${studioTile(h,'generic')}<div class="tcap">${lab}</div></div>`).join('');
+sh += `<div class="tile">${studioTile(0.82,'landmark')}<div class="tcap">LANDMARK</div></div>`;
+document.getElementById('studio').innerHTML = sh;
+
+document.getElementById('ramp').innerHTML = Array.from({length:24},(_,i)=>`<i style="background:${ramp(i/23)}"></i>`).join('');
+</script>
+</body>
+</html>

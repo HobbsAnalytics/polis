@@ -11,6 +11,8 @@ export interface PlacedTile {
   key: string;
   kind: 'generic' | 'landmark' | 'feature';
   conditionLabel?: ConditionLabel;
+  /** Raw 0..1 health of the source entity — drives the Patina ramp fill. */
+  health: number;
   districtId: string;
   districtName: string;
   boroughId: string | null;
@@ -85,6 +87,9 @@ interface Group {
   cells: Cell[];
 }
 
+/** Features only unlock at district maturity, so they read as thriving ground. */
+const FEATURE_HEALTH = 0.85;
+
 /** The ordered groups (boroughs first, then district-direct) for one district. */
 function districtGroups(d: CityViewModel['districts'][number]): Group[] {
   const groups: Group[] = [];
@@ -95,6 +100,7 @@ function districtGroups(d: CityViewModel['districts'][number]): Group[] {
         key: `gn:${g.id}`,
         kind: 'generic',
         conditionLabel: g.label,
+        health: g.condition,
         districtId: d.id,
         districtName: d.name,
         boroughId: b.id,
@@ -107,6 +113,7 @@ function districtGroups(d: CityViewModel['districts'][number]): Group[] {
         key: `lm:${l.id}`,
         kind: 'landmark',
         conditionLabel: l.label,
+        health: l.condition,
         districtId: d.id,
         districtName: d.name,
         boroughId: b.id,
@@ -123,6 +130,7 @@ function districtGroups(d: CityViewModel['districts'][number]): Group[] {
       key: `lm:${l.id}`,
       kind: 'landmark',
       conditionLabel: l.label,
+      health: l.condition,
       districtId: d.id,
       districtName: d.name,
       boroughId: null,
@@ -134,6 +142,7 @@ function districtGroups(d: CityViewModel['districts'][number]): Group[] {
     direct.push({
       key: `ft:${f.id}`,
       kind: 'feature',
+      health: FEATURE_HEALTH,
       districtId: d.id,
       districtName: d.name,
       boroughId: null,
@@ -146,6 +155,7 @@ function districtGroups(d: CityViewModel['districts'][number]): Group[] {
       key: `gn:${g.id}`,
       kind: 'generic',
       conditionLabel: g.label,
+      health: g.condition,
       districtId: d.id,
       districtName: d.name,
       boroughId: null,

@@ -104,7 +104,7 @@ export function LifePage({ vm, profile, eras, milestones, log }: Props) {
           <strong>{pctLeft}%</strong> of life remaining · age {vm.age}
           {currentEra && (
             <>
-              {' '}· <span style={{ color: '#44403c' }}>{currentEra.name}</span>
+              {' '}· <span style={{ color: 'var(--ink)' }}>{currentEra.name}</span>
             </>
           )}
         </p>

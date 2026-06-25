@@ -197,7 +197,10 @@ export function App() {
     <div className="container">
       <header className="header">
         <div>
-          <h1>Polis</h1>
+          <div className="brand">
+            <h1>Polis</h1>
+            <span className="epigraph">the shape of how you&rsquo;ve been living</span>
+          </div>
           <p className="subtitle">
             {named ? `${city.profile.name}'s city` : 'Your city, your self'} ·{' '}
             {named ? `day ${day}` : 'day 0 — name your city on the Profile tab to start the clock'}

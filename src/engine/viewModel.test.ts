@@ -1,5 +1,5 @@
 import { it, expect } from '../testkit.ts';
-import { conditionLabel, buildCityViewModel } from './viewModel.ts';
+import { conditionLabel, conditionColor, ramp, buildCityViewModel } from './viewModel.ts';
 import { createCity, addLandmark, addHabit } from './engine.ts';
 import type { District, Habit, TargetRef } from './types.ts';
 
@@ -18,6 +18,28 @@ const hab = (id: string, target: TargetRef): Habit => ({
   weight: 1,
   target,
   createdAtISO: '2026-01-01',
+});
+
+it('ramp maps health to the five material stops, interpolating and clamping', () => {
+  // The five stops from the design system (RUIN → PRISTINE).
+  expect(ramp(0)).toBe('rgb(110,99,91)'); // ashen
+  expect(ramp(0.22)).toBe('rgb(171,107,80)'); // oxide
+  expect(ramp(0.46)).toBe('rgb(185,182,166)'); // weathered stone
+  expect(ramp(0.63)).toBe('rgb(157,179,159)'); // faint sage
+  expect(ramp(1)).toBe('rgb(95,142,120)'); // verdigris
+  // linear interpolation halfway between the first two stops (h = 0.11)
+  expect(ramp(0.11)).toBe('rgb(141,103,86)');
+  // out of range clamps to the endpoints
+  expect(ramp(-1)).toBe('rgb(110,99,91)');
+  expect(ramp(2)).toBe('rgb(95,142,120)');
+});
+
+it('conditionColor maps each label to its ramp stop (no rainbow)', () => {
+  expect(conditionColor('pristine')).toBe(ramp(1));
+  expect(conditionColor('worn')).toBe(ramp(0.63));
+  expect(conditionColor('crumbling')).toBe(ramp(0.46));
+  expect(conditionColor('on fire')).toBe(ramp(0.22));
+  expect(conditionColor('ruin')).toBe(ramp(0));
 });
 
 it('condition labels respect thresholds', () => {

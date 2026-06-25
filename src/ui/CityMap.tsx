@@ -1,13 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { CityViewModel } from '../engine/types.ts';
-import { CONDITIONS, conditionColor } from '../engine/viewModel.ts';
+import { ramp } from '../engine/viewModel.ts';
 import { buildCityscape, hexCorner, HEX_DIRS } from '../engine/cityscape.ts';
 import type { PlacedTile } from '../engine/cityscape.ts';
+import { building, monument } from './tileArt.ts';
 import { useTooltip } from './useTooltip.tsx';
 
-const FEATURE_FILL = '#eab308';
-const DISTRICT_COLORS = ['#3b82f6', '#a855f7', '#14b8a6', '#ef4444', '#f59e0b', '#8b5cf6', '#0ea5e9', '#db2777'];
-const BOROUGH_COLORS = ['#1e293b', '#7c2d12', '#064e3b', '#581c87', '#0c4a6e', '#713f12'];
+const INK = '#232B28';
 
 function hexPoints(s: number): string {
   return Array.from({ length: 6 }, (_, i) => {
@@ -20,7 +19,7 @@ function tileInfo(t: PlacedTile): string {
   if (t.kind === 'feature') return `${t.districtName} · ${t.label}`;
   const where = t.boroughName ? `${t.districtName} › ${t.boroughName}` : t.districtName;
   if (t.kind === 'landmark') return `${where} · landmark: ${t.label} (tier ${t.tier ?? 0}) · ${t.conditionLabel}`;
-  return `${where} · neighborhood · ${t.conditionLabel}`;
+  return `${where} · ${t.conditionLabel}`;
 }
 
 /** Trace the boundary of a set of hex cells: any edge whose neighbor is outside the set. */
@@ -48,134 +47,146 @@ function centroid(tiles: PlacedTile[]): { x: number; y: number } {
 
 export function CityMap({ vm }: { vm: CityViewModel }) {
   const { handlers, tooltip } = useTooltip('[data-info]', 260);
+  const [focus, setFocus] = useState<string | null>(null);
+  const toggle = (id: string) => setFocus((cur) => (cur === id ? null : id));
 
-  const svg = useMemo(() => {
+  const layout = useMemo(() => {
     const scape = buildCityscape(vm);
     const s = scape.size;
     const points = hexPoints(s);
-    const districtColor = (districtId: string) =>
-      DISTRICT_COLORS[Math.max(0, vm.districts.findIndex((d) => d.id === districtId)) % DISTRICT_COLORS.length];
 
-    // Stable borough color by global borough order.
-    const boroughOrder = vm.districts.flatMap((d) => d.boroughs.map((b) => b.id));
-    const boroughColor = (boroughId: string) =>
-      BOROUGH_COLORS[Math.max(0, boroughOrder.indexOf(boroughId)) % BOROUGH_COLORS.length];
+    // Borough dashed sub-outlines (district order, boroughs first).
+    const boroughIds = [...new Set(scape.tiles.map((t) => t.boroughId).filter((b): b is string => b != null))];
+    const boroughOutlines = boroughIds
+      .map((bid) => boundaryPath(scape.tiles.filter((t) => t.boroughId === bid), s))
+      .filter(Boolean);
 
-    const districtLabels = vm.districts
+    // Per-district: solid outline, boundary (for focus), centroid (for the focus label).
+    const districts = vm.districts
       .map((d) => {
         const ts = scape.tiles.filter((t) => t.districtId === d.id);
         if (ts.length === 0) return null;
-        const c = centroid(ts);
-        return { id: d.id, name: d.name, x: c.x, y: Math.min(...ts.map((t) => t.y)) - s * 1.1, color: districtColor(d.id) };
+        return { id: d.id, name: d.name, health: d.health, path: boundaryPath(ts, s), centroid: centroid(ts) };
       })
-      .filter(Boolean) as { id: string; name: string; x: number; y: number; color: string }[];
+      .filter(Boolean) as { id: string; name: string; health: number; path: string; centroid: { x: number; y: number } }[];
 
-    // Borough outlines + labels, traced from each borough's cells.
-    const boroughs = boroughOrder
-      .map((bid) => {
-        const ts = scape.tiles.filter((t) => t.boroughId === bid);
-        if (ts.length === 0) return null;
-        const c = centroid(ts);
-        return { id: bid, name: ts[0].boroughName ?? '', path: boundaryPath(ts, s), x: c.x, y: c.y, color: boroughColor(bid) };
-      })
-      .filter(Boolean) as { id: string; name: string; path: string; x: number; y: number; color: string }[];
-
-    return (
-      <svg
-        viewBox={`0 ${-s * 2} ${scape.width} ${scape.height + s * 2}`}
-        width="100%"
-        role="img"
-        aria-label="Hex city map"
-        {...handlers}
-      >
-        {scape.tiles.map((t) => {
-          const fill = t.kind === 'feature' ? FEATURE_FILL : conditionColor(t.conditionLabel ?? 'ruin');
-          return (
-            <g key={t.key + t.districtId} transform={`translate(${t.x.toFixed(2)},${t.y.toFixed(2)})`} data-info={tileInfo(t)}>
-              <polygon points={points} fill={fill} stroke={districtColor(t.districtId)} strokeWidth={t.kind === 'landmark' ? 1.5 : 0.5} />
-              {t.kind === 'feature' && (
-                <text textAnchor="middle" dominantBaseline="central" fontSize={s}>
-                  {t.emoji}
-                </text>
-              )}
-              {t.kind === 'landmark' && (
-                <text textAnchor="middle" dominantBaseline="central" fontSize={s * 0.9} fill="#fff">
-                  ★
-                </text>
-              )}
-              {t.kind === 'generic' && t.conditionLabel === 'on fire' && (
-                <text textAnchor="middle" dominantBaseline="central" fontSize={s * 0.8}>
-                  🔥
-                </text>
-              )}
-            </g>
-          );
-        })}
-
-        {/* Borough outlines sit above the tiles so the section reads clearly. */}
-        {boroughs.map((b) => (
-          <path
-            key={b.id}
-            d={b.path}
-            fill="none"
-            stroke={b.color}
-            strokeWidth={2.5}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-            opacity={0.9}
-          />
-        ))}
-        {boroughs.map((b) => (
-          <text
-            key={`lbl-${b.id}`}
-            x={b.x}
-            y={b.y}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fontSize={s * 0.7}
-            fontWeight="700"
-            fill={b.color}
-            stroke="#fff"
-            strokeWidth={0.6}
-            paintOrder="stroke"
-            style={{ pointerEvents: 'none' }}
-          >
-            {b.name}
-          </text>
-        ))}
-
-        {districtLabels.map((l) => (
-          <text key={l.id} x={l.x} y={l.y} textAnchor="middle" fontSize={s * 1.1} fontWeight="700" fill={l.color}>
-            {l.name}
-          </text>
-        ))}
-      </svg>
-    );
+    return { scape, s, points, boroughOutlines, districts };
   }, [vm]);
 
+  const { scape, s, points, boroughOutlines, districts } = layout;
+  const fontPx = (s * 0.62).toFixed(1);
+  const focused = focus != null ? districts.find((d) => d.id === focus) : undefined;
+
   return (
-    <div className="panel">
-      <h2>City map</h2>
-      <p className="muted">
-        One city, carved into districts; boroughs are outlined sections within them. Each hex is a
-        single building with its own condition — hover any tile for detail.
-      </p>
+    <div className="map-stage">
+      <section className="map-card" onMouseLeave={() => setFocus(null)}>
+        <span className="map-caption">the city · one place, lived-in</span>
+        <svg
+          className="city-svg"
+          viewBox={`0 ${(-s * 1.2).toFixed(1)} ${scape.width.toFixed(1)} ${(scape.height + s * 1.4).toFixed(1)}`}
+          width="100%"
+          role="img"
+          aria-label="Hex city map of drawn buildings, tinted by condition"
+          {...handlers}
+        >
+          {scape.tiles.map((t, i) => {
+            const dim = focus != null && t.districtId !== focus;
+            const art = t.kind === 'landmark' ? monument(s) : t.kind === 'generic' ? building(t.health, i + 3, s) : '';
+            return (
+              <g
+                key={t.key + t.districtId}
+                className="tile-g"
+                transform={`translate(${t.x.toFixed(2)},${t.y.toFixed(2)})`}
+                style={{ opacity: dim ? 0.28 : 1, cursor: 'pointer' }}
+                data-info={tileInfo(t)}
+                onMouseEnter={() => setFocus(t.districtId)}
+                onClick={() => toggle(t.districtId)}
+              >
+                <polygon points={points} fill={ramp(t.health)} stroke={INK} strokeOpacity={0.14} strokeWidth={0.6} />
+                {art && <g dangerouslySetInnerHTML={{ __html: art }} />}
+                {t.kind === 'feature' && (
+                  <text textAnchor="middle" dominantBaseline="central" fontSize={s * 0.9} style={{ pointerEvents: 'none' }}>
+                    {t.emoji}
+                  </text>
+                )}
+              </g>
+            );
+          })}
 
-      <div className="legend">
-        {CONDITIONS.map((d) => (
-          <span key={d.label} className="legend-item">
-            <span className="legend-swatch" style={{ background: d.color }} />
-            {d.label}
-          </span>
-        ))}
-        <span className="legend-item">
-          <span className="legend-swatch" style={{ background: FEATURE_FILL }} />
-          feature
+          {/* Borough dashed sub-outlines, then district solid outlines. */}
+          {boroughOutlines.map((d, i) => (
+            <path key={`b${i}`} d={d} fill="none" stroke={INK} strokeOpacity={0.12} strokeWidth={1} strokeDasharray="1.5 2.5" strokeLinejoin="round" />
+          ))}
+          {districts.map((d) => (
+            <path key={`d${d.id}`} d={d.path} fill="none" stroke={INK} strokeOpacity={0.46} strokeWidth={1.7} strokeLinejoin="round" strokeLinecap="round" />
+          ))}
+
+          {/* Focus layer: full-ink outline + the district name (revealed only on focus). */}
+          {focused && (
+            <g style={{ pointerEvents: 'none' }}>
+              <path d={focused.path} fill="none" stroke={INK} strokeWidth={2.4} strokeLinejoin="round" strokeLinecap="round" />
+              <text
+                x={focused.centroid.x.toFixed(1)}
+                y={focused.centroid.y.toFixed(1)}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontFamily="Space Grotesk, sans-serif"
+                fontSize={fontPx}
+                fontWeight={600}
+                letterSpacing="1.6"
+                fill={INK}
+                stroke="#F3F4F0"
+                strokeWidth={2.6}
+                paintOrder="stroke"
+              >
+                {focused.name.toUpperCase()}
+              </text>
+            </g>
+          )}
+        </svg>
+      </section>
+
+      <aside className="map-rail">
+        <div className="rail-h">Districts</div>
+        {districts.map((d) => {
+          const col = ramp(d.health);
+          const pct = Math.round(d.health * 100);
+          return (
+            <button
+              key={d.id}
+              type="button"
+              className={`map-district${focus === d.id ? ' active' : ''}`}
+              onMouseEnter={() => setFocus(d.id)}
+              onMouseLeave={() => setFocus(null)}
+              onFocus={() => setFocus(d.id)}
+              onBlur={() => setFocus(null)}
+              onClick={() => toggle(d.id)}
+              aria-pressed={focus === d.id}
+            >
+              <span className="row1">
+                <span className="map-pip" style={{ background: col }} />
+                <span className="dname">{d.name}</span>
+                <span className="dpct">{pct}</span>
+              </span>
+              <span className="map-bar">
+                <i style={{ width: `${pct}%`, background: col }} />
+              </span>
+            </button>
+          );
+        })}
+        {districts.length === 0 && <p className="abandoned">no districts yet</p>}
+      </aside>
+
+      <div className="map-legend">
+        <span>weathered</span>
+        <span className="map-ramp" aria-hidden="true">
+          {Array.from({ length: 24 }, (_, i) => (
+            <i key={i} style={{ background: ramp(i / 23) }} />
+          ))}
         </span>
-        <span className="legend-item">★ landmark</span>
+        <span>thriving</span>
+        <span className="legmark">▲ landmark</span>
       </div>
-
-      <div className="citymap">{svg}</div>
 
       {tooltip}
     </div>

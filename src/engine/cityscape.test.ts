@@ -1,8 +1,9 @@
 import { it, expect } from '../testkit.ts';
 import { buildCityscape, hexSpiral } from './cityscape.ts';
 import { buildCityViewModel } from './viewModel.ts';
+import { createCity, addLandmark, applyCheckIn } from './engine.ts';
 import { createSeededCity } from './seed.ts';
-import { applyCheckIn } from './engine.ts';
+import type { District } from './types.ts';
 
 it('hexSpiral returns n unique coordinates starting at center', () => {
   const s = hexSpiral(20);
@@ -20,6 +21,21 @@ it('tile count equals generics + landmarks (incl. borough) + features', () => {
     return sum + d.generic.length + boroughGeneric + landmarks + d.features.length;
   }, 0);
   expect(buildCityscape(vm).tiles).toHaveLength(expected);
+});
+
+it('each tile carries the raw health of its source entity (drives the ramp)', () => {
+  const dist = (id: string): District => ({ id, name: id, description: '', healthDirect: 0.5, maturity: 0, features: [] });
+  let s = createCity({
+    districts: [dist('d1')],
+    boroughs: [{ id: 'b1', districtId: 'd1', name: 'B', healthDirect: 0.5 }],
+    neighborhoods: [{ id: 'n1', districtId: 'd1', boroughId: 'b1', health: 0.37, createdDay: 0 }],
+  });
+  s = addLandmark(s, { districtId: 'd1', boroughId: 'b1', name: 'L', condition: 0.91 }).state;
+  const tiles = buildCityscape(buildCityViewModel(s)).tiles;
+  const generic = tiles.find((t) => t.kind === 'generic');
+  const landmark = tiles.find((t) => t.kind === 'landmark');
+  expect(generic?.health).toBe(0.37);
+  expect(landmark?.health).toBe(0.91);
 });
 
 it('layout is deterministic and tiles never share a coordinate', () => {
