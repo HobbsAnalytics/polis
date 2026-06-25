@@ -32,8 +32,11 @@ import {
   getLastCheckIn,
   recordCheckIn,
 } from '../persistence/storage.ts';
+import { hasSeenSplash, markSplashSeen } from '../persistence/splash.ts';
+import type { SplashPage } from '../persistence/splash.ts';
 import { CheckIn } from './CheckIn.tsx';
 import { Modal } from './Modal.tsx';
+import { SplashModal } from './SplashModal.tsx';
 import { LifePage } from './LifePage.tsx';
 import { CityMap } from './CityMap.tsx';
 import { ProfilePage } from './ProfilePage.tsx';
@@ -47,6 +50,7 @@ export function App() {
   const [lastCheckIn, setLastCheckIn] = useState<string | null>(null);
   const [page, setPage] = useState<Page>('map');
   const [checkInOpen, setCheckInOpen] = useState(false);
+  const [activeSplash, setActiveSplash] = useState<SplashPage | null>(null);
   const initialized = useRef(false);
 
   useEffect(() => {
@@ -54,7 +58,21 @@ export function App() {
     initialized.current = true;
     setCity(loadResolvedCity(todayISO()));
     setLastCheckIn(getLastCheckIn());
+    // The Map splash greets on first launch (Map is the default page).
+    if (!hasSeenSplash('map')) setActiveSplash('map');
   }, []);
+
+  // Navigate to a page, auto-opening its splash the first time it's visited ever.
+  // Driven by the nav action (not an effect) so re-renders never reopen it.
+  function goToPage(next: Page) {
+    setPage(next);
+    if (!hasSeenSplash(next)) setActiveSplash(next);
+  }
+
+  function closeSplash() {
+    if (activeSplash) markSplashSeen(activeSplash);
+    setActiveSplash(null);
+  }
 
   function update(next: CityState) {
     setCity(next);
@@ -179,19 +197,28 @@ export function App() {
         </div>
         <div className="toolbar">
           <div className="tabs">
-            <button className={`tab ${page === 'map' ? 'tab-on' : ''}`} onClick={() => setPage('map')}>
+            <button className={`tab ${page === 'map' ? 'tab-on' : ''}`} onClick={() => goToPage('map')}>
               Map
             </button>
-            <button className={`tab ${page === 'life' ? 'tab-on' : ''}`} onClick={() => setPage('life')}>
+            <button className={`tab ${page === 'life' ? 'tab-on' : ''}`} onClick={() => goToPage('life')}>
               Life
             </button>
-            <button className={`tab ${page === 'history' ? 'tab-on' : ''}`} onClick={() => setPage('history')}>
+            <button className={`tab ${page === 'history' ? 'tab-on' : ''}`} onClick={() => goToPage('history')}>
               History
             </button>
-            <button className={`tab ${page === 'profile' ? 'tab-on' : ''}`} onClick={() => setPage('profile')}>
+            <button className={`tab ${page === 'profile' ? 'tab-on' : ''}`} onClick={() => goToPage('profile')}>
               Profile
             </button>
           </div>
+          <button
+            type="button"
+            className="help-btn"
+            aria-label="About this page"
+            title="About this page"
+            onClick={() => setActiveSplash(page)}
+          >
+            ?
+          </button>
           <button onClick={handleExport} className="btn">
             Export
           </button>
@@ -267,6 +294,14 @@ export function App() {
             }}
           />
         </Modal>
+      )}
+
+      {activeSplash && (
+        <SplashModal
+          page={activeSplash}
+          onClose={closeSplash}
+          onDontShowAgain={() => markSplashSeen(activeSplash)}
+        />
       )}
     </div>
   );

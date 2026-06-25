@@ -854,6 +854,82 @@ input[type="range"] {
   }
 }
 
+/* Onboarding splash */
+.splash-body {
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.62;
+}
+.splash-body p {
+  margin: 0 0 0.85rem;
+}
+.splash-body p:last-child {
+  margin-bottom: 0;
+}
+.splash-body strong {
+  font-weight: 600;
+}
+.splash-aside {
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+.splash-aside em {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--ink);
+}
+.splash-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.splash-dontshow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.splash-dontshow input {
+  cursor: pointer;
+}
+
+/* Quiet circled "?" — re-opens the current page's splash. Hairline/ghost. */
+.help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-2);
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+.help-btn:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.help-btn:focus-visible {
+  outline: 2px solid var(--verdigris);
+  outline-offset: 2px;
+}
+
 /* Custom hover tooltip for week boxes (native title is unreliable on tiny cells). */
 .week-tip {
   position: fixed;
