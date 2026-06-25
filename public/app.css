@@ -706,6 +706,154 @@ input[type="range"] {
   }
 }
 
+/* Rail "Log today" CTA — ink outline, inverts on hover. */
+.cta {
+  margin-top: 26px;
+  width: 100%;
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  padding: 11px 14px;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.cta:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+.cta:disabled {
+  color: var(--ink-2);
+  border-color: var(--line);
+  background: transparent;
+  cursor: not-allowed;
+}
+.cta:focus-visible {
+  outline: 2px solid var(--verdigris);
+  outline-offset: 2px;
+}
+.cta .arr {
+  float: right;
+}
+
+/* Map detail panel (click-to-inspect) — spans the full stage width. */
+.map-detail {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.map-detail-hint {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+  margin: 0;
+}
+.map-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.map-detail-head .district-name {
+  margin: 0.1rem 0 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.detail-node {
+  margin-top: 0.85rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+}
+.detail-landmark {
+  margin-left: 0.9rem;
+  padding-left: 0.8rem;
+  border-top: none;
+  border-left: 2px solid var(--line);
+}
+.detail-habits {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.4rem;
+}
+.detail-habit {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+.detail-habit-name {
+  color: var(--ink);
+}
+.detail-nohabit {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin: 0.4rem 0 0;
+}
+
+/* Modal (centered dialog on a scrim) */
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(35, 43, 40, 0.42);
+  animation: scrim-in 160ms ease;
+}
+.modal {
+  width: 100%;
+  max-width: 40rem;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1.25rem 1.4rem 1.4rem;
+  box-shadow: 0 8px 30px rgba(35, 43, 40, 0.18);
+  animation: modal-in 170ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.modal:focus {
+  outline: none;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+.modal-title {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
 /* Custom hover tooltip for week boxes (native title is unreliable on tiny cells). */
 .week-tip {
   position: fixed;

@@ -27,8 +27,7 @@ export function CheckIn({ habits, canCheckIn, onComplete }: Props) {
   }
 
   return (
-    <div className="panel">
-      <h2>Daily check-in</h2>
+    <div className="checkin">
       {!canCheckIn && <p className="note-ok">Already checked in today. See you tomorrow.</p>}
 
       <div className="checkin-cols">

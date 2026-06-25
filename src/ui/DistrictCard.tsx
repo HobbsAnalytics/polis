@@ -1,108 +1,153 @@
-import type { BoroughVM, DistrictVM, LandmarkVM } from '../engine/types.ts';
+// Reusable detail pieces for the Map's click-to-inspect panel. Given the view
+// model + the city's habits, these render a district or a single borough with
+// health bars and the habits connected to each borough/landmark (via the
+// existing rollup `habitsTargeting`). No engine/data change — just surfacing.
+import type { BoroughVM, CityViewModel, ConditionLabel, Habit, LandmarkVM } from '../engine/types.ts';
 import { conditionSlug } from '../engine/viewModel.ts';
+import { habitsTargeting } from '../engine/rollup.ts';
 
 function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
 }
 
-function LandmarkRow({ lm }: { lm: LandmarkVM }) {
-  const slug = conditionSlug(lm.label);
+/** A health bar tinted by the Patina condition ramp (via the cond-* classes). */
+export function ConditionBar({ value, label }: { value: number; label?: ConditionLabel }) {
   return (
-    <div className="landmark">
-      <div className="landmark-head">
-        <span className="landmark-name">
-          {lm.name} <span className="tier">tier {lm.tier}</span>
-        </span>
-        <span className={`badge tcond-${slug}`}>{lm.label}</span>
-      </div>
-      <div className="bar bar-lg">
-        <div className={`bar-fill cond-${slug}`} style={{ width: pct(lm.condition) }} />
-      </div>
+    <div className="bar bar-lg">
+      <div className={`bar-fill cond-${conditionSlug(label)}`} style={{ width: pct(value) }} />
     </div>
   );
 }
 
-function BoroughBlock({ borough }: { borough: BoroughVM }) {
-  const slug = conditionSlug(borough.label);
+function HabitLine({ habit }: { habit: Habit }) {
   return (
-    <div className="borough">
-      <div className="landmark-head">
-        <span className="landmark-name">⌂ {borough.name}</span>
-        <span className={`badge tcond-${slug}`}>{borough.label}</span>
-      </div>
-      <div className="bar bar-lg">
-        <div className={`bar-fill cond-${slug}`} style={{ width: pct(borough.health) }} />
-      </div>
-      {borough.generic.length > 0 && (
-        <div className="chips">
-          {borough.generic.map((b) => (
-            <span key={b.id} className={`chip cond-${conditionSlug(b.label)}`} title={b.label} />
-          ))}
-        </div>
-      )}
-      {borough.landmarks.map((lm) => (
-        <LandmarkRow key={lm.id} lm={lm} />
+    <div className="detail-habit">
+      <span className={`badge ${habit.kind === 'bad' ? 'tcond-onfire' : 'tcond-pristine'}`}>{habit.kind}</span>
+      <span className="detail-habit-name">{habit.name}</span>
+      <span className="tier">weight {habit.weight}</span>
+    </div>
+  );
+}
+
+/** The habits attached to a borough or landmark, or a quiet empty note. */
+function HabitList({ habits, kind, id }: { habits: Habit[]; kind: 'borough' | 'landmark'; id: string }) {
+  const attached = habitsTargeting(habits, kind, id);
+  if (attached.length === 0) return <p className="detail-nohabit">no habits connected</p>;
+  return (
+    <div className="detail-habits">
+      {attached.map((h) => (
+        <HabitLine key={h.id} habit={h} />
       ))}
     </div>
   );
 }
 
-export function DistrictCard({ district }: { district: DistrictVM }) {
-  const slug = conditionSlug(district.label);
+export function LandmarkDetail({ lm, habits }: { lm: LandmarkVM; habits: Habit[] }) {
   return (
-    <div className="panel" style={{ marginBottom: 0 }}>
-      <div className="district-head">
-        <h3 className="district-name">{district.name}</h3>
-        <span className={`badge tcond-${slug}`}>{district.label}</span>
+    <div className="detail-node detail-landmark">
+      <div className="landmark-head">
+        <span className="landmark-name">
+          ▲ {lm.name} <span className="tier">tier {lm.tier}</span>
+        </span>
+        <span className={`badge tcond-${conditionSlug(lm.label)}`}>{lm.label}</span>
       </div>
-      <p className="muted">{district.description}</p>
+      <ConditionBar value={lm.condition} label={lm.label} />
+      <HabitList habits={habits} kind="landmark" id={lm.id} />
+    </div>
+  );
+}
 
-      <div className="bar">
-        <div className={`bar-fill cond-${slug}`} style={{ width: pct(district.health) }} />
+export function BoroughDetail({ borough, habits }: { borough: BoroughVM; habits: Habit[] }) {
+  return (
+    <div className="detail-node">
+      <div className="landmark-head">
+        <span className="landmark-name">⌂ {borough.name}</span>
+        <span className={`badge tcond-${conditionSlug(borough.label)}`}>{borough.label}</span>
       </div>
+      <ConditionBar value={borough.health} label={borough.label} />
+      <HabitList habits={habits} kind="borough" id={borough.id} />
+      {borough.landmarks.map((lm) => (
+        <LandmarkDetail key={lm.id} lm={lm} habits={habits} />
+      ))}
+    </div>
+  );
+}
 
-      {district.maturity > 0 && (
-        <div className="maturity">maturity {district.maturity.toFixed(1)}</div>
-      )}
+export type Selection = { level: 'district'; id: string } | { level: 'borough'; id: string } | null;
 
-      {district.features.length > 0 && (
-        <div className="features">
-          {district.features.map((f) => (
-            <span key={f.id} className="feature" title={f.name}>
-              {f.emoji} {f.name}
-            </span>
-          ))}
+/** The Map's bottom detail panel: a hint at rest, or the selected district/borough. */
+export function MapDetailPanel({
+  vm,
+  habits,
+  selection,
+  onClear,
+}: {
+  vm: CityViewModel;
+  habits: Habit[];
+  selection: Selection;
+  onClear: () => void;
+}) {
+  if (!selection) {
+    return (
+      <div className="map-detail">
+        <p className="map-detail-hint">Select a district or borough to see its health and the habits connected to it.</p>
+      </div>
+    );
+  }
+
+  if (selection.level === 'district') {
+    const d = vm.districts.find((x) => x.id === selection.id);
+    if (!d) return <div className="map-detail" />;
+    return (
+      <div className="map-detail">
+        <div className="map-detail-head">
+          <div>
+            <div className="section-label">District</div>
+            <h3 className="district-name">
+              {d.name} <span className={`badge tcond-${conditionSlug(d.label)}`}>{d.label}</span>
+            </h3>
+          </div>
+          <button type="button" className="btn btn-sm" onClick={onClear}>
+            Clear
+          </button>
         </div>
-      )}
-
-      <div className="section-label">Neighborhood ({district.generic.length} buildings)</div>
-      <div className="chips">
-        {district.generic.length === 0 ? (
-          <span className="abandoned">empty lot</span>
-        ) : (
-          district.generic.map((b) => (
-            <span key={b.id} className={`chip cond-${conditionSlug(b.label)}`} title={b.label} />
-          ))
+        <ConditionBar value={d.health} label={d.label} />
+        {d.maturity > 0 && (
+          <p className="tier" style={{ marginTop: '0.4rem' }}>
+            maturity {d.maturity.toFixed(1)}
+            {d.features.length > 0 && ` · ${d.features.map((f) => f.name).join(', ')}`}
+          </p>
         )}
+        {d.boroughs.map((b) => (
+          <BoroughDetail key={b.id} borough={b} habits={habits} />
+        ))}
+        {d.landmarks.map((lm) => (
+          <LandmarkDetail key={lm.id} lm={lm} habits={habits} />
+        ))}
       </div>
+    );
+  }
 
-      {district.boroughs.length > 0 && (
-        <>
-          <div className="section-label">Boroughs</div>
-          {district.boroughs.map((b) => (
-            <BoroughBlock key={b.id} borough={b} />
-          ))}
-        </>
-      )}
-
-      {district.landmarks.length > 0 && (
-        <>
-          <div className="section-label">Landmarks</div>
-          {district.landmarks.map((lm) => (
-            <LandmarkRow key={lm.id} lm={lm} />
-          ))}
-        </>
-      )}
+  const borough = vm.districts.flatMap((d) => d.boroughs).find((b) => b.id === selection.id);
+  if (!borough) return <div className="map-detail" />;
+  return (
+    <div className="map-detail">
+      <div className="map-detail-head">
+        <div>
+          <div className="section-label">Borough</div>
+          <h3 className="district-name">
+            {borough.name} <span className={`badge tcond-${conditionSlug(borough.label)}`}>{borough.label}</span>
+          </h3>
+        </div>
+        <button type="button" className="btn btn-sm" onClick={onClear}>
+          Clear
+        </button>
+      </div>
+      <ConditionBar value={borough.health} label={borough.label} />
+      <HabitList habits={habits} kind="borough" id={borough.id} />
+      {borough.landmarks.map((lm) => (
+        <LandmarkDetail key={lm.id} lm={lm} habits={habits} />
+      ))}
     </div>
   );
 }

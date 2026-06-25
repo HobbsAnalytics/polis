@@ -4,7 +4,6 @@ import { cityAtSnapshot } from '../engine/history.ts';
 import { buildCityViewModel } from '../engine/viewModel.ts';
 import { weekTrend } from '../engine/lifeline.ts';
 import { formatDate } from './format.ts';
-import { CityView } from './CityView.tsx';
 import { CityMap } from './CityMap.tsx';
 
 const TREND_LABEL: Record<string, string> = {
@@ -90,8 +89,7 @@ export function HistoryPage({ city }: { city: CityState }) {
         </p>
       </div>
 
-      <CityView vm={vm} />
-      <CityMap vm={vm} />
+      <CityMap vm={vm} habits={city.habits} />
     </div>
   );
 }

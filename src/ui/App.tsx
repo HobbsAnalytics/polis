@@ -12,7 +12,6 @@ import {
   addBorough,
   renameBorough,
   applyCheckIn,
-  applyMissedDay,
   cityDay,
   requestHabitRemoval,
   cancelHabitRemoval,
@@ -24,7 +23,6 @@ import {
 import { buildCityViewModel } from '../engine/viewModel.ts';
 import { buildLifeline } from '../engine/lifeline.ts';
 import { todayISO } from '../engine/dates.ts';
-import { createSeededCity } from '../engine/seed.ts';
 import { LIFE_ERAS } from '../data/eras.ts';
 import {
   saveCity,
@@ -33,25 +31,22 @@ import {
   loadResolvedCity,
   getLastCheckIn,
   recordCheckIn,
-  resetResolution,
 } from '../persistence/storage.ts';
-import { CityView } from './CityView.tsx';
 import { CheckIn } from './CheckIn.tsx';
+import { Modal } from './Modal.tsx';
 import { LifePage } from './LifePage.tsx';
 import { CityMap } from './CityMap.tsx';
 import { ProfilePage } from './ProfilePage.tsx';
 import type { NewHabitFields } from './ProfilePage.tsx';
 import { HistoryPage } from './HistoryPage.tsx';
-import { DevPanel } from './DevPanel.tsx';
-import type { AdvanceMode } from './DevPanel.tsx';
-import { addDaysISO } from '../engine/dates.ts';
 
-type Page = 'city' | 'map' | 'life' | 'history' | 'profile';
+type Page = 'map' | 'life' | 'history' | 'profile';
 
 export function App() {
   const [city, setCity] = useState<CityState | null>(null);
   const [lastCheckIn, setLastCheckIn] = useState<string | null>(null);
-  const [page, setPage] = useState<Page>('city');
+  const [page, setPage] = useState<Page>('map');
+  const [checkInOpen, setCheckInOpen] = useState(false);
   const initialized = useRef(false);
 
   useEffect(() => {
@@ -139,30 +134,6 @@ export function App() {
     if (city) update(confirmHabitRemoval(city, id, todayISO()));
   }
 
-  // --- TEMPORARY: time-travel debug controls (remove before final release) ---
-  function handleAdvance(times: number, mode: AdvanceMode) {
-    if (!city) return;
-    const goodIds = city.habits.filter((h) => h.kind === 'good').map((h) => h.id);
-    const badIds = city.habits.filter((h) => h.kind === 'bad').map((h) => h.id);
-    let s = city;
-    // Date the simulated days so they land in real (recent) weeks — lets the
-    // activity log and Life-tab week colors populate when fast-forwarding.
-    for (let i = 0; i < times; i++) {
-      const dateISO = addDaysISO(todayISO(), -(times - 1 - i));
-      if (mode === 'good') s = applyCheckIn(s, { completedHabitIds: goodIds, loggedBadHabitIds: [], dateISO });
-      else if (mode === 'bad') s = applyCheckIn(s, { completedHabitIds: [], loggedBadHabitIds: badIds, dateISO });
-      else s = applyMissedDay(s, dateISO);
-    }
-    update(s);
-  }
-  function handleReset() {
-    const s = createSeededCity();
-    resetResolution(todayISO());
-    setLastCheckIn(null);
-    update(s);
-  }
-  // --- END TEMPORARY ---
-
   function handleExport() {
     if (!city) return;
     const blob = new Blob([exportCity(city)], { type: 'application/json' });
@@ -208,9 +179,6 @@ export function App() {
         </div>
         <div className="toolbar">
           <div className="tabs">
-            <button className={`tab ${page === 'city' ? 'tab-on' : ''}`} onClick={() => setPage('city')}>
-              City
-            </button>
             <button className={`tab ${page === 'map' ? 'tab-on' : ''}`} onClick={() => setPage('map')}>
               Map
             </button>
@@ -243,24 +211,25 @@ export function App() {
         </div>
       </header>
 
-      {era && (
-        <div className="era-banner" style={{ borderLeftColor: era.color }}>
-          <span className="era-name">{era.name}</span>
-          <span className="era-meta">
-            {era.stage} · age {lifeline.age} · week {(lifeline.weeksLived + 1).toLocaleString()} of{' '}
-            {lifeline.totalWeeks.toLocaleString()}
-          </span>
-        </div>
-      )}
-
-      {page === 'city' && (
+      {page === 'map' && (
         <>
-          <CheckIn habits={city.habits} canCheckIn={canCheckIn} onComplete={handleCheckIn} />
-          <CityView vm={vm} />
-          <DevPanel onAdvance={handleAdvance} onReset={handleReset} />
+          {era && (
+            <div className="era-banner" style={{ borderLeftColor: era.color }}>
+              <span className="era-name">{era.name}</span>
+              <span className="era-meta">
+                {era.stage} · age {lifeline.age} · week {(lifeline.weeksLived + 1).toLocaleString()} of{' '}
+                {lifeline.totalWeeks.toLocaleString()}
+              </span>
+            </div>
+          )}
+          <CityMap
+            vm={vm}
+            habits={city.habits}
+            canCheckIn={canCheckIn}
+            onLogToday={() => setCheckInOpen(true)}
+          />
         </>
       )}
-      {page === 'map' && <CityMap vm={vm} />}
       {page === 'life' && (
         <LifePage vm={lifeline} profile={city.profile} eras={LIFE_ERAS} milestones={city.milestones} log={city.log} />
       )}
@@ -285,6 +254,19 @@ export function App() {
           onAddMilestone={handleAddMilestone}
           onRemoveMilestone={handleRemoveMilestone}
         />
+      )}
+
+      {checkInOpen && (
+        <Modal title="Daily check-in" onClose={() => setCheckInOpen(false)}>
+          <CheckIn
+            habits={city.habits}
+            canCheckIn={canCheckIn}
+            onComplete={(good, bad) => {
+              handleCheckIn(good, bad);
+              setCheckInOpen(false);
+            }}
+          />
+        </Modal>
       )}
     </div>
   );
