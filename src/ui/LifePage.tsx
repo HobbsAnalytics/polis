@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import type { DayLog, Milestone, Profile } from '../engine/types.ts';
 import type { LifelineVM } from '../engine/lifeline.ts';
-import { weekSundayISO, weeklyHealthChange, weekTrend } from '../engine/lifeline.ts';
-import { weekIndex } from '../engine/dates.ts';
+import { weeklyHealthChange, weekTrend, lifeCellIndex, birthdayInYear } from '../engine/lifeline.ts';
+import { addDaysISO } from '../engine/dates.ts';
 import { useTooltip } from './useTooltip.tsx';
 import { formatDate } from './format.ts';
 import type { EraDef } from '../data/eras.ts';
@@ -31,7 +31,7 @@ export function LifePage({ vm, profile, eras, milestones, log }: Props) {
   const pctLeft = Math.round((vm.weeksLeft / vm.totalWeeks) * 100);
 
   const isOnChart = (m: Milestone) => {
-    const idx = weekIndex(profile.birthDateISO, m.dateISO);
+    const idx = lifeCellIndex(profile.birthDateISO, m.dateISO);
     return idx >= 0 && idx < vm.totalWeeks;
   };
 
@@ -41,14 +41,19 @@ export function LifePage({ vm, profile, eras, milestones, log }: Props) {
   const grid = useMemo(() => {
     const byWeek = new Map<number, Milestone[]>();
     for (const m of milestones) {
-      const idx = weekIndex(profile.birthDateISO, m.dateISO);
+      const idx = lifeCellIndex(profile.birthDateISO, m.dateISO);
       if (idx >= 0 && idx < vm.totalWeeks) {
         byWeek.set(idx, [...(byWeek.get(idx) ?? []), m]);
       }
     }
     const changeByWeek = weeklyHealthChange(log, profile.birthDateISO);
     const boxInfo = (index: number, isBirthday: boolean, year: number): string => {
-      let t = `Week of ${formatDate(weekSundayISO(profile.birthDateISO, index))}`;
+      const row = Math.floor(index / 52);
+      const cell = index % 52;
+      const birthY = Number(profile.birthDateISO.slice(0, 4));
+      const anchor = birthdayInYear(profile.birthDateISO, birthY + row);
+      const cellStart = addDaysISO(anchor, cell * 7);
+      let t = `Week of ${formatDate(cellStart)}`;
       if (isBirthday) t += ` · Birthday (age ${year})`;
       const trend = weekTrend(changeByWeek.get(index));
       if (trend !== 'none') t += ` · city ${TREND_LABEL[trend]}`;
