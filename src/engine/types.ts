@@ -2,6 +2,7 @@
 // This module has ZERO UI/render/DOM dependencies.
 
 export type HabitKind = 'good' | 'bad';
+export type HabitCadence = 'daily' | 'weekdays' | 'weekly' | 'twiceMonthly' | 'monthly';
 /** Internal node addressing for the roll-up (a district is still a node). */
 export type NodeKind = 'district' | 'borough' | 'landmark';
 /** Where a habit may attach: a borough or a landmark — never a district directly. */
