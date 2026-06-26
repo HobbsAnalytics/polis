@@ -68,6 +68,11 @@ function migrate(obj: Record<string, unknown>): unknown {
     // everything parented directly to a district into its first borough.
     o = migrateV6toV7(o);
   }
+  if (o.version === 7) {
+    // v8: good habits gain cadence ('daily' default) and lastCompletedISO;
+    // settings tunables are backfilled so the upkeep engine never sees NaN.
+    o = migrateV7toV8(o);
+  }
   return o;
 }
 
@@ -115,6 +120,34 @@ function migrateV6toV7(o: Record<string, unknown>): Record<string, unknown> {
     ),
     version: 7,
   };
+}
+
+/**
+ * v7 → v8: good habits gain `cadence` ('daily' default) and `lastCompletedISO`
+ * (most recent log dateISO where the habit was completed, else createdAtISO).
+ * Bad habits are left unchanged — cadence is a good-habit-only concept.
+ * Settings tunables added in Task 3 are backfilled from DEFAULT_SETTINGS so the
+ * upkeep engine never reads undefined and produces NaN.
+ */
+function migrateV7toV8(o: Record<string, unknown>): Record<string, unknown> {
+  const habits = Array.isArray(o.habits) ? (o.habits as Record<string, unknown>[]) : [];
+  const log = Array.isArray(o.log) ? (o.log as Record<string, unknown>[]) : [];
+  const migratedHabits = habits.map((h) => {
+    if (h.kind !== 'good') return h; // bad habits have no cadence (good-habit-only constraint)
+    let last: string | undefined;
+    for (const entry of log) {
+      const ids = Array.isArray(entry.completedHabitIds) ? (entry.completedHabitIds as string[]) : [];
+      const dISO = typeof entry.dateISO === 'string' ? entry.dateISO : '';
+      if (ids.includes(h.id as string) && dISO) last = last && last > dISO ? last : dISO;
+    }
+    return {
+      ...h,
+      cadence: h.cadence ?? 'daily',
+      lastCompletedISO: h.lastCompletedISO ?? last ?? h.createdAtISO,
+    };
+  });
+  const settings = { ...DEFAULT_SETTINGS, ...((o.settings as Record<string, unknown>) ?? {}) };
+  return { ...o, habits: migratedHabits, settings, version: 8 };
 }
 
 /** Old saves stored a thin per-day `history`; carry it forward into `log` shape. */

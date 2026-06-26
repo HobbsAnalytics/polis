@@ -130,6 +130,7 @@ export function App() {
         weight: fields.weight,
         target: fields.target,
         createdAtISO: todayISO(),
+        ...(fields.kind === 'good' ? { cadence: fields.cadence ?? 'daily', lastCompletedISO: todayISO() } : {}),
       }),
     );
   }
@@ -322,6 +323,7 @@ export function App() {
             habits={city.habits}
             canCheckIn={canCheckIn}
             canLogYesterday={yesterdayOpen}
+            todayISO={todayISO()}
             onComplete={(good, bad) => {
               handleCheckIn(good, bad);
               setCheckInOpen(false);

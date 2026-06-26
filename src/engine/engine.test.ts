@@ -21,6 +21,7 @@ import {
   removeMilestone,
 } from './engine.ts';
 import { districtHealth } from './rollup.ts';
+import { addDaysISO } from './dates.ts';
 import type { Borough, District, Habit, TargetRef } from './types.ts';
 
 const dist = (id: string, healthDirect = 0.5): District => ({
@@ -51,9 +52,10 @@ it('good habit raises landmark condition; missing it lowers slightly', () => {
   const r = addLandmark(s, { districtId: 'd1', boroughId: 'b1', name: 'L' });
   s = addHabit(r.state, hab('h1', 'good', { kind: 'landmark', id: r.landmarkId }));
   const before = s.landmarks[0].condition;
-  const up = applyCheckIn(s, { completedHabitIds: ['h1'], loggedBadHabitIds: [] });
+  const up = applyCheckIn(s, { completedHabitIds: ['h1'], loggedBadHabitIds: [], dateISO: '2026-01-02' });
   expect(up.landmarks[0].condition).toBeGreaterThan(before);
-  const down = applyCheckIn(s, { completedHabitIds: [], loggedBadHabitIds: [] });
+  // Habit createdAtISO='2026-01-01', daily → dueToday on '2026-01-02' → erodes.
+  const down = applyCheckIn(s, { completedHabitIds: [], loggedBadHabitIds: [], dateISO: '2026-01-02' });
   expect(down.landmarks[0].condition).toBeLessThan(before);
 });
 
@@ -70,7 +72,10 @@ it('habit weight scales its effect', () => {
   expect(gain2).toBeGreaterThan(gain1);
 });
 
-it('neglect gradient: bad habit > missed habit > missed checkin', () => {
+// New cadence model: bad habit hits hardest; a missed good habit and a missed day erode equally.
+// The old 3-way gradient (missedHabitPenalty vs missedCheckinPenalty) no longer applies —
+// both missed-habit and missed-day use the same overdueErosionBase erosion path.
+it('bad habit hits hardest; a missed good habit and a missed day erode equally', () => {
   let s = createCity({ districts: [dist('d1')], boroughs: [bor('b1', 'd1')] });
   const r = addLandmark(s, { districtId: 'd1', boroughId: 'b1', name: 'L' });
   s = r.state;
@@ -78,11 +83,15 @@ it('neglect gradient: bad habit > missed habit > missed checkin', () => {
   s = addHabit(s, hab('b', 'bad', { kind: 'landmark', id: r.landmarkId }));
   const start = 0.8;
   s.landmarks[0].condition = start;
-  const badHit = start - applyCheckIn(s, { completedHabitIds: ['g'], loggedBadHabitIds: ['b'] }).landmarks[0].condition;
-  const missHabit = start - applyCheckIn(s, { completedHabitIds: [], loggedBadHabitIds: [] }).landmarks[0].condition;
-  const missCheckin = start - applyMissedDay(s).landmarks[0].condition;
+  // Complete good + log bad: good deposit (+0.06) and bad penalty (-0.12) → net big drop.
+  const badHit = start - applyCheckIn(s, { completedHabitIds: ['g'], loggedBadHabitIds: ['b'], dateISO: '2026-01-02' }).landmarks[0].condition;
+  // Miss good habit on a checked-in day: same overdue erosion path as a missed day.
+  const missHabit = start - applyCheckIn(s, { completedHabitIds: [], loggedBadHabitIds: [], dateISO: '2026-01-02' }).landmarks[0].condition;
+  // Miss the entire day: same cadence-based erosion, no checkin distinction.
+  const missCheckin = start - applyMissedDay(s, '2026-01-02').landmarks[0].condition;
   expect(badHit).toBeGreaterThan(missHabit);
-  expect(missHabit).toBeGreaterThan(missCheckin);
+  // Missed habit and missed day now erode equally (same cadence path, no checkedIn branch).
+  expect(Math.abs(missHabit - missCheckin) < 1e-6).toBe(true);
 });
 
 it('one missed day is small, three weeks is large (weeks not days)', () => {
@@ -90,9 +99,11 @@ it('one missed day is small, three weeks is large (weeks not days)', () => {
   const r = addLandmark(s, { districtId: 'd1', boroughId: 'b1', name: 'L' });
   s = addHabit(r.state, hab('g', 'good', { kind: 'landmark', id: r.landmarkId }));
   s.landmarks[0].condition = 1;
-  const oneDay = 1 - applyMissedDay(s).landmarks[0].condition;
+  // Habit createdAtISO='2026-01-01', daily → dueToday on '2026-01-02' → erodes by overdueErosionBase (0.03) + entropy (0.01) = 0.04.
+  const oneDay = 1 - applyMissedDay(s, '2026-01-02').landmarks[0].condition;
+  // Escalating dates so daysOverdue grows each iteration (anchor stays createdAtISO since never completed).
   let t = s;
-  for (let i = 0; i < 21; i++) t = applyMissedDay(t);
+  for (let i = 0; i < 22; i++) t = applyMissedDay(t, addDaysISO('2026-01-02', i));
   expect(oneDay).toBeLessThan(0.05);
   expect(1 - t.landmarks[0].condition).toBeGreaterThan(0.3);
 });

@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import type { Habit } from '../engine/types.ts';
+import { groupGoodHabits } from './checkinGroups.ts';
 
 interface Props {
   habits: Habit[];
   canCheckIn: boolean;
   canLogYesterday: boolean;
+  todayISO: string;
   onComplete: (completedHabitIds: string[], loggedBadHabitIds: string[]) => void;
   onCompleteYesterday: (completedHabitIds: string[], loggedBadHabitIds: string[]) => void;
 }
 
-export function CheckIn({ habits, canCheckIn, canLogYesterday, onComplete, onCompleteYesterday }: Props) {
-  const goodHabits = habits.filter((h) => h.kind === 'good');
+export function CheckIn({ habits, canCheckIn, canLogYesterday, todayISO, onComplete, onCompleteYesterday }: Props) {
   const badHabits = habits.filter((h) => h.kind === 'bad');
   const [done, setDone] = useState<Set<string>>(new Set());
   const [slipped, setSlipped] = useState<Set<string>>(new Set());
@@ -34,19 +35,63 @@ export function CheckIn({ habits, canCheckIn, canLogYesterday, onComplete, onCom
 
       <div className="checkin-cols">
         <div>
-          <div className="col-label">Good habits</div>
-          {goodHabits.map((h) => (
-            <label key={h.id} className="habit">
-              <input
-                type="checkbox"
-                disabled={!canCheckIn}
-                checked={done.has(h.id)}
-                onChange={() => toggle(done, setDone, h.id)}
-              />
-              {h.name}
-            </label>
-          ))}
-          {goodHabits.length === 0 && <p className="abandoned">none yet</p>}
+          {(() => {
+            const groups = groupGoodHabits(habits, todayISO);
+            const allEmpty = groups.overdue.length === 0 && groups.dueToday.length === 0 && groups.maintained.length === 0;
+            if (allEmpty) return <p className="abandoned">none yet</p>;
+            return (
+              <>
+                {groups.overdue.length > 0 && (
+                  <>
+                    <div className="col-label">Overdue</div>
+                    {groups.overdue.map(({ habit, status }) => (
+                      <label key={habit.id} className="habit">
+                        <input
+                          type="checkbox"
+                          disabled={!canCheckIn}
+                          checked={done.has(habit.id)}
+                          onChange={() => toggle(done, setDone, habit.id)}
+                        />
+                        {habit.name}<span className="muted"> · overdue {status.daysOverdue}d</span>
+                      </label>
+                    ))}
+                  </>
+                )}
+                {groups.dueToday.length > 0 && (
+                  <>
+                    <div className="col-label">Due today</div>
+                    {groups.dueToday.map(({ habit }) => (
+                      <label key={habit.id} className="habit">
+                        <input
+                          type="checkbox"
+                          disabled={!canCheckIn}
+                          checked={done.has(habit.id)}
+                          onChange={() => toggle(done, setDone, habit.id)}
+                        />
+                        {habit.name}<span className="muted"> · due today</span>
+                      </label>
+                    ))}
+                  </>
+                )}
+                {groups.maintained.length > 0 && (
+                  <>
+                    <div className="col-label">Maintained</div>
+                    {groups.maintained.map(({ habit, status }) => (
+                      <label key={habit.id} className="habit">
+                        <input
+                          type="checkbox"
+                          disabled={!canCheckIn}
+                          checked={done.has(habit.id)}
+                          onChange={() => toggle(done, setDone, habit.id)}
+                        />
+                        {habit.name}<span className="muted"> ✓ maintained · due in {status.dueInDays}d</span>
+                      </label>
+                    ))}
+                  </>
+                )}
+              </>
+            );
+          })()}
         </div>
 
         <div>

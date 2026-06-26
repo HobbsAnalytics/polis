@@ -1,6 +1,6 @@
 import type { Profile, Settings } from './types.ts';
 
-export const CITY_VERSION = 7;
+export const CITY_VERSION = 8;
 
 export const DEFAULT_PROFILE: Profile = {
   name: '',
@@ -11,7 +11,11 @@ export const DEFAULT_PROFILE: Profile = {
 
 /**
  * Defaults tuned so one missed day is noise and ~3 neglected weeks clearly shows.
- * Neglect gradient: missedCheckinPenalty < missedHabitPenalty < badHabitPenalty.
+ * Habit health uses the cadence upkeep model (Task 4): completing deposits goodHabitGain,
+ * maintained habits gain upkeepDailyGain, and overdue habits erode at overdueErosionBase
+ * growing by overdueGrowthPerDay up to overdueGrowthCapDays. The legacy
+ * missedHabitPenalty/missedCheckinPenalty are retained for save compatibility but are no
+ * longer read by the habit math.
  */
 export const DEFAULT_SETTINGS: Settings = {
   entropyPerDay: 0.01,
@@ -25,6 +29,10 @@ export const DEFAULT_SETTINGS: Settings = {
   maturityThreshold: 0.8,
   maturityGainPerDay: 0.2,
   removalCooldownDays: 2,
+  upkeepDailyGain: 0.012,
+  overdueErosionBase: 0.03,
+  overdueGrowthPerDay: 0.15,
+  overdueGrowthCapDays: 14,
 };
 
 /** Named organic features unlocked at district maturity milestones (sticky). */
