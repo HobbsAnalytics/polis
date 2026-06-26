@@ -148,6 +148,10 @@ function advanceDay(state: CityState, input: DayInput): CityState {
   const logged = new Set(input.loggedBadHabitIds);
   const today = input.dateISO ?? '';
 
+  const nextHabits = state.habits.map((h) =>
+    h.kind === 'good' && completed.has(h.id) && today ? { ...h, lastCompletedISO: today } : h,
+  );
+
   const upd = (current: number, kind: 'district' | 'borough' | 'landmark', id: string) =>
     updateScalar(current, habitsTargeting(state.habits, kind, id), completed, logged, s, today);
   // habit-driven delta (no entropy) for a container, memoized — neighborhoods reuse it.
@@ -189,6 +193,7 @@ function advanceDay(state: CityState, input: DayInput): CityState {
     boroughs,
     neighborhoods,
     districts: state.districts,
+    habits: nextHabits,
   };
 
   next.districts = next.districts.map((d) => {

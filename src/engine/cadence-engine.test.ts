@@ -1,5 +1,5 @@
 import { it, expect } from '../testkit.ts';
-import { habitDelta } from './engine.ts';
+import { habitDelta, createCity, addHabit, applyCheckIn, applyMissedDay } from './engine.ts';
 import { DEFAULT_SETTINGS } from './settings.ts';
 import type { Habit } from './types.ts';
 
@@ -34,4 +34,18 @@ it('daily equivalence: done = +goodHabitGain, missed next day = -overdueErosionB
   const h = good({ cadence: 'daily', lastCompletedISO: '2026-06-10' });
   expect(Math.abs(habitDelta([h], new Set(['h']), none, s, '2026-06-11') - s.goodHabitGain) < 1e-6).toBe(true);
   expect(Math.abs(habitDelta([h], none, none, s, '2026-06-11') - -s.overdueErosionBase) < 1e-6).toBe(true);
+});
+
+it('applyCheckIn stamps lastCompletedISO on completed good habits', () => {
+  let c = createCity({ boroughs: [{ id: 'b', districtId: 'd', name: 'b', healthDirect: 0.5 }], districts: [{ id: 'd', name: 'd', description: '', healthDirect: 0.5, maturity: 0, features: [] }] });
+  c = addHabit(c, { id: 'h', name: 'h', kind: 'good', weight: 1, target: { kind: 'borough', id: 'b' }, createdAtISO: '2026-06-01', cadence: 'weekly' });
+  const after = applyCheckIn(c, { completedHabitIds: ['h'], loggedBadHabitIds: [], dateISO: '2026-06-05' });
+  expect(after.habits.find((x) => x.id === 'h')?.lastCompletedISO).toBe('2026-06-05');
+});
+
+it('missed day leaves lastCompletedISO unchanged', () => {
+  let c = createCity({ boroughs: [{ id: 'b', districtId: 'd', name: 'b', healthDirect: 0.5 }], districts: [{ id: 'd', name: 'd', description: '', healthDirect: 0.5, maturity: 0, features: [] }] });
+  c = addHabit(c, { id: 'h', name: 'h', kind: 'good', weight: 1, target: { kind: 'borough', id: 'b' }, createdAtISO: '2026-06-01', cadence: 'weekly', lastCompletedISO: '2026-06-01' });
+  const after = applyMissedDay(c, '2026-06-03');
+  expect(after.habits.find((x) => x.id === 'h')?.lastCompletedISO).toBe('2026-06-01');
 });
