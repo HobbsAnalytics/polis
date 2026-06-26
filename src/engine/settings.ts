@@ -25,6 +25,10 @@ export const DEFAULT_SETTINGS: Settings = {
   maturityThreshold: 0.8,
   maturityGainPerDay: 0.2,
   removalCooldownDays: 2,
+  upkeepDailyGain: 0.012,
+  overdueErosionBase: 0.03,
+  overdueGrowthPerDay: 0.15,
+  overdueGrowthCapDays: 14,
 };
 
 /** Named organic features unlocked at district maturity milestones (sticky). */

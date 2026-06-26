@@ -23,6 +23,9 @@ export interface Habit {
   createdAtISO: string;
   /** Set (to an ISO date) when the user requests removal; cooldown gates deletion. */
   pendingRemovalSinceISO?: string;
+  cadence?: HabitCadence;
+  /** ISO date the habit was last completed (good habits). */
+  lastCompletedISO?: string;
 }
 
 /** A wellbeing domain — a neighborhood. */
@@ -100,6 +103,10 @@ export interface Settings {
   maturityThreshold: number; // district health at/above which maturity accrues
   maturityGainPerDay: number;
   removalCooldownDays: number;
+  upkeepDailyGain: number;
+  overdueErosionBase: number;
+  overdueGrowthPerDay: number;
+  overdueGrowthCapDays: number;
 }
 
 export interface Profile {
