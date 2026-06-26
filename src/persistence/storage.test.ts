@@ -1,5 +1,5 @@
 import { it, expect, beforeEach } from '../testkit.ts';
-import { saveCity, loadCity, exportCity, importCity, catchUpMissedDays } from './storage.ts';
+import { saveCity, loadCity, exportCity, importCity, catchUpMissedDays, anchorStartDate, canLogYesterday, recordCheckIn, getLastCheckIn } from './storage.ts';
 import { createSeededCity } from '../engine/seed.ts';
 import { createCity } from '../engine/engine.ts';
 import type { CityState, District } from '../engine/types.ts';
@@ -126,4 +126,48 @@ it('catchUpMissedDays advances day count', () => {
   const s = createSeededCity();
   expect(catchUpMissedDays(s, 3).day).toBe(s.day + 3);
   expect(catchUpMissedDays(s, 0).day).toBe(s.day);
+});
+
+const prof = (startDateISO = '') => ({ name: 'Hobbs', birthDateISO: '1988-11-26', lifespanYears: 75, startDateISO });
+
+it('anchorStartDate keeps an existing startDateISO', () => {
+  const s = { ...createSeededCity(), profile: prof('2026-01-01') };
+  expect(anchorStartDate(s, '2026-06-26', null).profile.startDateISO).toBe('2026-01-01');
+});
+
+it('anchorStartDate back-fills from the earliest log date', () => {
+  const base = createSeededCity();
+  const s = { ...base, profile: prof(''), log: [
+    { ...base.log[0] ?? {}, day: 1, dateISO: '2026-03-10', checkedIn: true, completedHabitIds: [], loggedBadHabitIds: [], netHealthChange: 0, snapshot: { neighborhoods: [], landmarks: [] } },
+    { day: 2, dateISO: '2026-03-11', checkedIn: false, completedHabitIds: [], loggedBadHabitIds: [], netHealthChange: 0, snapshot: { neighborhoods: [], landmarks: [] } },
+  ] } as unknown as CityState;
+  expect(anchorStartDate(s, '2026-06-26', '2026-06-25').profile.startDateISO).toBe('2026-03-10');
+});
+
+it('anchorStartDate falls back to the resolved marker, then today', () => {
+  const s = { ...createSeededCity(), profile: prof('') };
+  expect(anchorStartDate(s, '2026-06-26', '2026-06-20').profile.startDateISO).toBe('2026-06-20');
+  expect(anchorStartDate({ ...s }, '2026-06-26', null).profile.startDateISO).toBe('2026-06-26');
+});
+
+it('canLogYesterday: open when marker is ≤ today-2 and today not logged', () => {
+  localStorage.setItem('polis.lastResolved', '2026-06-24'); // today-2
+  expect(canLogYesterday('2026-06-26')).toBe(true);
+});
+
+it('canLogYesterday: closed once yesterday is resolved', () => {
+  localStorage.setItem('polis.lastResolved', '2026-06-25'); // yesterday resolved
+  expect(canLogYesterday('2026-06-26')).toBe(false);
+});
+
+it('canLogYesterday: closed once today is logged', () => {
+  localStorage.setItem('polis.lastResolved', '2026-06-24');
+  localStorage.setItem('polis.lastCheckIn', '2026-06-26');
+  expect(canLogYesterday('2026-06-26')).toBe(false);
+});
+
+it('recordCheckIn(dateISO) stamps both markers to that day', () => {
+  recordCheckIn('2026-06-25');
+  expect(getLastCheckIn()).toBe('2026-06-25');
+  expect(localStorage.getItem('polis.lastResolved')).toBe('2026-06-25');
 });

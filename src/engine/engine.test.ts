@@ -279,3 +279,9 @@ it('removal cooldown: request, blocked confirm, cancel, allowed confirm', () => 
   // 2 days later → removed
   expect(confirmHabitRemoval(s, 'g', '2026-06-22').habits).toHaveLength(0);
 });
+
+it('cityDay counts from startDateISO regardless of name', () => {
+  expect(cityDay({ name: '', birthDateISO: '1988-11-26', lifespanYears: 75, startDateISO: '' }, '2026-06-26')).toBe(0);
+  expect(cityDay({ name: '', birthDateISO: '1988-11-26', lifespanYears: 75, startDateISO: '2026-06-20' }, '2026-06-26')).toBe(7);
+  expect(cityDay({ name: 'Hobbs', birthDateISO: '1988-11-26', lifespanYears: 75, startDateISO: '2026-06-26' }, '2026-06-26')).toBe(1);
+});

@@ -7,6 +7,9 @@ import {
   weekSundayISO,
   weeklyHealthChange,
   weekTrend,
+  birthdayInYear,
+  lifeCell,
+  lifeCellIndex,
 } from './lifeline.ts';
 import { LIFE_ERAS } from '../data/eras.ts';
 import type { DayLog, Profile } from './types.ts';
@@ -100,4 +103,62 @@ it('era bands: each era labels its first year exactly once', () => {
   const vm = buildLifeline(profile, '2026-06-21', LIFE_ERAS);
   const starts = vm.years.filter((y) => y.eraStart).map((y) => y.eraId);
   expect(starts).toEqual(LIFE_ERAS.map((e) => e.id));
+});
+
+it('birthdayInYear returns the birthday in the given calendar year', () => {
+  expect(birthdayInYear('1988-11-26', 1990)).toBe('1990-11-26');
+  expect(birthdayInYear('1988-11-26', 2025)).toBe('2025-11-26');
+});
+
+it('birthdayInYear clamps Feb-29 to Feb-28 in non-leap years', () => {
+  expect(birthdayInYear('2000-02-29', 2001)).toBe('2001-02-28');
+  expect(birthdayInYear('2000-02-29', 2004)).toBe('2004-02-29');
+});
+
+it('lifeCell puts the birthday on cell 0 of the right row, every year', () => {
+  const b = '1988-11-26';
+  expect(lifeCell(b, '1988-11-26')).toEqual({ row: 0, cell: 0 });
+  expect(lifeCell(b, '1990-11-26')).toEqual({ row: 2, cell: 0 });
+  expect(lifeCell(b, '2025-11-26')).toEqual({ row: 37, cell: 0 });
+});
+
+it('lifeCell steps weeks within a row and caps the final cell at 51', () => {
+  const b = '1988-11-26';
+  expect(lifeCell(b, '1988-12-03')).toEqual({ row: 0, cell: 1 }); // +7 days
+  // day 360 of the year → past 51*7=357 → capped at 51, NOT spilling to row 1
+  expect(lifeCell(b, '1989-11-21')).toEqual({ row: 0, cell: 51 });
+});
+
+it('lifeCell returns null before birth; lifeCellIndex returns -1', () => {
+  expect(lifeCell('1988-11-26', '1988-11-25')).toBeNull();
+  expect(lifeCellIndex('1988-11-26', '1988-11-25')).toBe(-1);
+});
+
+it('lifeCellIndex = row*52 + cell', () => {
+  expect(lifeCellIndex('1988-11-26', '1990-11-26')).toBe(104);
+});
+
+it('weeklyHealthChange buckets days into birthday-anchored cells (not raw week count)', () => {
+  const b = '1988-11-26';
+  const m = weeklyHealthChange(
+    [log('1988-11-26', 0.2), log('1988-11-27', -0.05), log('1990-11-26', -0.3), log('1989-11-25', 0.4), log('', 99)],
+    b,
+  );
+  expect(Math.abs((m.get(0) ?? 0) - 0.15) < 1e-9).toBe(true);   // both first-row, cell 0
+  expect(Math.abs((m.get(104) ?? 0) - -0.3) < 1e-9).toBe(true); // row 2 cell 0
+  // 1989-11-25 is 364 days after birth: raw weekIndex buckets at 52, but
+  // birthday-anchored it caps in row 0 at cell 51. Discriminates the strategies.
+  expect(Math.abs((m.get(51) ?? 0) - 0.4) < 1e-9).toBe(true);
+  expect(m.get(52)).toBe(undefined);
+  expect(m.get(undefined as unknown as number)).toBe(undefined);
+});
+
+it('buildLifeline marks the today cell as current and prior cells lived', () => {
+  const profile = { name: 'x', birthDateISO: '1988-11-26', lifespanYears: 75, startDateISO: '2020-01-01' };
+  const vm = buildLifeline(profile, '1990-12-03', LIFE_ERAS); // row 2, cell ~1
+  const row2 = vm.years[2];
+  expect(row2.weeks[0].status).toBe('lived');
+  expect(row2.weeks[1].status).toBe('current');
+  expect(row2.weeks[2].status).toBe('future');
+  expect(vm.age).toBe(2);
 });

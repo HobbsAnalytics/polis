@@ -152,6 +152,13 @@ export function catchUpMissedDays(state: CityState, elapsedDays: number, firstDa
   return s;
 }
 
+export function anchorStartDate(state: CityState, todayISO: string, lastResolved: string | null): CityState {
+  if (state.profile.startDateISO) return state;
+  const dated = state.log.map((d) => d.dateISO).filter(Boolean).sort();
+  const start = dated[0] ?? lastResolved ?? todayISO;
+  return { ...state, profile: { ...state.profile, startDateISO: start } };
+}
+
 /**
  * Load the saved city (or seed a fresh one) and resolve any whole days missed
  * since the last resolution — entropy/missed-check-in for each, minus today
@@ -161,13 +168,17 @@ export function catchUpMissedDays(state: CityState, elapsedDays: number, firstDa
 export function loadResolvedCity(todayISO: string): CityState {
   let s = loadCity() ?? createSeededCity();
   const lastResolved = localStorage.getItem(LAST_RESOLVED_KEY);
+
+  const anchored = anchorStartDate(s, todayISO, lastResolved);
+  if (anchored !== s) { s = anchored; saveCity(s); }
+
   if (lastResolved == null) {
     localStorage.setItem(LAST_RESOLVED_KEY, todayISO);
   } else {
-    const missed = Math.max(0, dayDiffISO(lastResolved, todayISO) - 1);
+    const missed = Math.max(0, dayDiffISO(lastResolved, todayISO) - 2); // grace: hold yesterday open
     if (missed > 0) {
       s = catchUpMissedDays(s, missed, addDaysISO(lastResolved, 1));
-      localStorage.setItem(LAST_RESOLVED_KEY, addDaysISO(todayISO, -1));
+      localStorage.setItem(LAST_RESOLVED_KEY, addDaysISO(todayISO, -2));
       saveCity(s);
     }
   }
@@ -179,10 +190,18 @@ export function getLastCheckIn(): string | null {
   return localStorage.getItem(LAST_CHECKIN_KEY);
 }
 
-/** Mark today as both checked-in and resolved. */
-export function recordCheckIn(todayISO: string): void {
-  localStorage.setItem(LAST_RESOLVED_KEY, todayISO);
-  localStorage.setItem(LAST_CHECKIN_KEY, todayISO);
+/** Mark the given day as both checked-in and resolved. */
+export function recordCheckIn(dateISO: string): void {
+  localStorage.setItem(LAST_RESOLVED_KEY, dateISO);
+  localStorage.setItem(LAST_CHECKIN_KEY, dateISO);
+}
+
+/** True iff yesterday (today−1) is unresolved and today is not yet logged. */
+export function canLogYesterday(todayISO: string): boolean {
+  const lastResolved = localStorage.getItem(LAST_RESOLVED_KEY);
+  const lastCheckIn = localStorage.getItem(LAST_CHECKIN_KEY);
+  const yesterdayOpen = lastResolved == null || dayDiffISO(lastResolved, todayISO) >= 2;
+  return yesterdayOpen && lastCheckIn !== todayISO;
 }
 
 /** Reset resolution bookkeeping for a fresh seed (no check-in yet, resolved today). */
