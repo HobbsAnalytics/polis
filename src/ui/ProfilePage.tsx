@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { SelectHTMLAttributes } from 'react';
-import type { Borough, CityState, District, Habit, HabitKind, HabitTargetKind, Landmark, Milestone, Profile } from '../engine/types.ts';
+import type { Borough, CityState, District, Habit, HabitCadence, HabitKind, HabitTargetKind, Landmark, Milestone, Profile } from '../engine/types.ts';
 import { weekIndex, dayDiffISO } from '../engine/dates.ts';
 import { formatDate } from './format.ts';
 
@@ -8,6 +8,7 @@ export interface NewHabitFields {
   name: string;
   kind: HabitKind;
   weight: number;
+  cadence?: HabitCadence;
   target: { kind: HabitTargetKind; id: string };
 }
 
@@ -185,11 +186,12 @@ function AddHabitForm({
   const [name, setName] = useState('');
   const [kind, setKind] = useState<HabitKind>('good');
   const [weight, setWeight] = useState(1);
+  const [cadence, setCadence] = useState<HabitCadence>('daily');
   const [error, setError] = useState('');
 
   function submit() {
     if (!name.trim()) return setError('Name the habit.');
-    onCreateHabit({ name: name.trim(), kind, weight, target: { kind: targetKind, id: targetId } });
+    onCreateHabit({ name: name.trim(), kind, weight, cadence, target: { kind: targetKind, id: targetId } });
     onClose();
   }
 
@@ -217,6 +219,18 @@ function AddHabitForm({
           Importance
           <ImportanceSelect value={weight} onChange={setWeight} name="habitWeight" />
         </label>
+        {kind === 'good' && (
+          <label className="field">
+            Cadence
+            <select name="habitCadence" value={cadence} onChange={(e) => setCadence(e.target.value as HabitCadence)}>
+              <option value="daily">Daily</option>
+              <option value="weekdays">Weekdays</option>
+              <option value="weekly">Weekly</option>
+              <option value="twiceMonthly">Twice a month</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </label>
+        )}
       </div>
       {error && <p className="note-warn">{error}</p>}
       <div className="tree-actions">

@@ -130,6 +130,7 @@ export function App() {
         weight: fields.weight,
         target: fields.target,
         createdAtISO: todayISO(),
+        ...(fields.kind === 'good' ? { cadence: fields.cadence ?? 'daily', lastCompletedISO: todayISO() } : {}),
       }),
     );
   }
