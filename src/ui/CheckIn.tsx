@@ -4,10 +4,12 @@ import type { Habit } from '../engine/types.ts';
 interface Props {
   habits: Habit[];
   canCheckIn: boolean;
+  canLogYesterday: boolean;
   onComplete: (completedHabitIds: string[], loggedBadHabitIds: string[]) => void;
+  onCompleteYesterday: (completedHabitIds: string[], loggedBadHabitIds: string[]) => void;
 }
 
-export function CheckIn({ habits, canCheckIn, onComplete }: Props) {
+export function CheckIn({ habits, canCheckIn, canLogYesterday, onComplete, onCompleteYesterday }: Props) {
   const goodHabits = habits.filter((h) => h.kind === 'good');
   const badHabits = habits.filter((h) => h.kind === 'bad');
   const [done, setDone] = useState<Set<string>>(new Set());
@@ -67,6 +69,21 @@ export function CheckIn({ habits, canCheckIn, onComplete }: Props) {
       <button onClick={submit} disabled={!canCheckIn} className="btn-primary" style={{ marginTop: '1.25rem' }}>
         Complete check-in
       </button>
+
+      {canLogYesterday && (
+        <>
+          <button
+            onClick={() => onCompleteYesterday([...done], [...slipped])}
+            className="btn"
+            style={{ marginTop: '0.5rem' }}
+          >
+            Log these for yesterday instead
+          </button>
+          <p className="muted" style={{ marginTop: '0.5rem' }}>
+            Forgot yesterday? Log it before today — once you log today, yesterday closes.
+          </p>
+        </>
+      )}
     </div>
   );
 }

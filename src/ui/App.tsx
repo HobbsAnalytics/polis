@@ -12,6 +12,7 @@ import {
   addBorough,
   renameBorough,
   applyCheckIn,
+  applyMissedDay,
   cityDay,
   requestHabitRemoval,
   cancelHabitRemoval,
@@ -22,7 +23,7 @@ import {
 } from '../engine/engine.ts';
 import { buildCityViewModel } from '../engine/viewModel.ts';
 import { buildLifeline } from '../engine/lifeline.ts';
-import { todayISO } from '../engine/dates.ts';
+import { todayISO, addDaysISO } from '../engine/dates.ts';
 import { LIFE_ERAS } from '../data/eras.ts';
 import {
   saveCity,
@@ -31,6 +32,7 @@ import {
   loadResolvedCity,
   getLastCheckIn,
   recordCheckIn,
+  canLogYesterday,
 } from '../persistence/storage.ts';
 import { hasSeenSplash, markSplashSeen } from '../persistence/splash.ts';
 import type { SplashPage } from '../persistence/splash.ts';
@@ -82,9 +84,21 @@ export function App() {
   function handleCheckIn(completedHabitIds: string[], loggedBadHabitIds: string[]) {
     if (!city) return;
     const today = todayISO();
-    const next = applyCheckIn(city, { completedHabitIds, loggedBadHabitIds, dateISO: today });
+    let next = city;
+    // Preserve chronological order: an unlogged-yet-open yesterday becomes missed.
+    if (canLogYesterday(today)) next = applyMissedDay(next, addDaysISO(today, -1));
+    next = applyCheckIn(next, { completedHabitIds, loggedBadHabitIds, dateISO: today });
     recordCheckIn(today);
     setLastCheckIn(today);
+    update(next);
+  }
+
+  function handleCheckInYesterday(completedHabitIds: string[], loggedBadHabitIds: string[]) {
+    if (!city) return;
+    const yesterday = addDaysISO(todayISO(), -1);
+    const next = applyCheckIn(city, { completedHabitIds, loggedBadHabitIds, dateISO: yesterday });
+    recordCheckIn(yesterday); // markers → yesterday; today stays open
+    setLastCheckIn(yesterday);
     update(next);
   }
 
@@ -179,6 +193,7 @@ export function App() {
   const lifeline = buildLifeline(city.profile, todayISO(), LIFE_ERAS);
   const era = LIFE_ERAS.find((e) => e.id === lifeline.currentEraId);
   const canCheckIn = lastCheckIn !== todayISO();
+  const yesterdayOpen = canLogYesterday(todayISO());
   const named = city.profile.name.trim() !== '';
   const day = cityDay(city.profile, todayISO());
 
@@ -288,8 +303,13 @@ export function App() {
           <CheckIn
             habits={city.habits}
             canCheckIn={canCheckIn}
+            canLogYesterday={yesterdayOpen}
             onComplete={(good, bad) => {
               handleCheckIn(good, bad);
+              setCheckInOpen(false);
+            }}
+            onCompleteYesterday={(good, bad) => {
+              handleCheckInYesterday(good, bad);
               setCheckInOpen(false);
             }}
           />
