@@ -322,6 +322,7 @@ export function App() {
             habits={city.habits}
             canCheckIn={canCheckIn}
             canLogYesterday={yesterdayOpen}
+            todayISO={todayISO()}
             onComplete={(good, bad) => {
               handleCheckIn(good, bad);
               setCheckInOpen(false);
