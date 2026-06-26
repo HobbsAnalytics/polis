@@ -5,6 +5,44 @@ import { MS_PER_DAY, MS_PER_WEEK, weekIndex } from './dates.ts';
 
 const WEEKS_PER_YEAR = 52;
 
+const pad = (n: number) => String(n).padStart(2, '0');
+
+function isLeap(y: number): boolean {
+  return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+}
+
+/** The birthday within `calendarYear`; Feb-29 clamps to Feb-28 off leap years. */
+export function birthdayInYear(birthDateISO: string, calendarYear: number): string {
+  const [, mm, dd] = birthDateISO.split('-').map(Number);
+  let day = dd;
+  if (mm === 2 && dd === 29 && !isLeap(calendarYear)) day = 28;
+  return `${calendarYear}-${pad(mm)}-${pad(day)}`;
+}
+
+/** Row = whole-year age; cell = capped week offset from that year's birthday. */
+export function lifeCell(
+  birthDateISO: string,
+  dateISO: string,
+): { row: number; cell: number } | null {
+  if (Date.parse(dateISO) < Date.parse(birthDateISO)) return null;
+  const birthY = Number(birthDateISO.slice(0, 4));
+  const dateY = Number(dateISO.slice(0, 4));
+  // Walk down from an upper-bound year to the birthday-year the date falls in.
+  let row = dateY - birthY;
+  while (row >= 0 && Date.parse(birthdayInYear(birthDateISO, birthY + row)) > Date.parse(dateISO)) {
+    row -= 1;
+  }
+  const anchor = birthdayInYear(birthDateISO, birthY + row);
+  const days = Math.floor((Date.parse(dateISO) - Date.parse(anchor)) / MS_PER_DAY);
+  const cell = Math.min(51, Math.floor(days / 7));
+  return { row, cell };
+}
+
+export function lifeCellIndex(birthDateISO: string, dateISO: string): number {
+  const c = lifeCell(birthDateISO, dateISO);
+  return c ? c.row * WEEKS_PER_YEAR + c.cell : -1;
+}
+
 export function weeksLived(birthDateISO: string, todayISO: string): number {
   const ms = Date.parse(todayISO) - Date.parse(birthDateISO);
   if (!Number.isFinite(ms) || ms <= 0) return 0;

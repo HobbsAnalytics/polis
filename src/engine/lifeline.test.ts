@@ -7,6 +7,9 @@ import {
   weekSundayISO,
   weeklyHealthChange,
   weekTrend,
+  birthdayInYear,
+  lifeCell,
+  lifeCellIndex,
 } from './lifeline.ts';
 import { LIFE_ERAS } from '../data/eras.ts';
 import type { DayLog, Profile } from './types.ts';
@@ -100,4 +103,37 @@ it('era bands: each era labels its first year exactly once', () => {
   const vm = buildLifeline(profile, '2026-06-21', LIFE_ERAS);
   const starts = vm.years.filter((y) => y.eraStart).map((y) => y.eraId);
   expect(starts).toEqual(LIFE_ERAS.map((e) => e.id));
+});
+
+it('birthdayInYear returns the birthday in the given calendar year', () => {
+  expect(birthdayInYear('1988-11-26', 1990)).toBe('1990-11-26');
+  expect(birthdayInYear('1988-11-26', 2025)).toBe('2025-11-26');
+});
+
+it('birthdayInYear clamps Feb-29 to Feb-28 in non-leap years', () => {
+  expect(birthdayInYear('2000-02-29', 2001)).toBe('2001-02-28');
+  expect(birthdayInYear('2000-02-29', 2004)).toBe('2004-02-29');
+});
+
+it('lifeCell puts the birthday on cell 0 of the right row, every year', () => {
+  const b = '1988-11-26';
+  expect(lifeCell(b, '1988-11-26')).toEqual({ row: 0, cell: 0 });
+  expect(lifeCell(b, '1990-11-26')).toEqual({ row: 2, cell: 0 });
+  expect(lifeCell(b, '2025-11-26')).toEqual({ row: 37, cell: 0 });
+});
+
+it('lifeCell steps weeks within a row and caps the final cell at 51', () => {
+  const b = '1988-11-26';
+  expect(lifeCell(b, '1988-12-03')).toEqual({ row: 0, cell: 1 }); // +7 days
+  // day 360 of the year → past 51*7=357 → capped at 51, NOT spilling to row 1
+  expect(lifeCell(b, '1989-11-21')).toEqual({ row: 0, cell: 51 });
+});
+
+it('lifeCell returns null before birth; lifeCellIndex returns -1', () => {
+  expect(lifeCell('1988-11-26', '1988-11-25')).toBeNull();
+  expect(lifeCellIndex('1988-11-26', '1988-11-25')).toBe(-1);
+});
+
+it('lifeCellIndex = row*52 + cell', () => {
+  expect(lifeCellIndex('1988-11-26', '1990-11-26')).toBe(104);
 });
