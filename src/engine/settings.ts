@@ -1,6 +1,6 @@
 import type { Profile, Settings } from './types.ts';
 
-export const CITY_VERSION = 7;
+export const CITY_VERSION = 8;
 
 export const DEFAULT_PROFILE: Profile = {
   name: '',

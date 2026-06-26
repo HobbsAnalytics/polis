@@ -2,6 +2,7 @@ import { it, expect, beforeEach } from '../testkit.ts';
 import { saveCity, loadCity, exportCity, importCity, catchUpMissedDays, anchorStartDate, canLogYesterday, recordCheckIn, getLastCheckIn } from './storage.ts';
 import { createSeededCity } from '../engine/seed.ts';
 import { createCity } from '../engine/engine.ts';
+import { DEFAULT_SETTINGS } from '../engine/settings.ts';
 import type { CityState, District } from '../engine/types.ts';
 
 const dist = (id: string, healthDirect = 0.5): District => ({
@@ -56,7 +57,7 @@ it('migrates a v2 save (no profile/milestones) up to current with defaults', () 
   const { profile: _p, milestones: _m, ...old } = s;
   saveCity({ ...old, version: 2 } as unknown as typeof s);
   const loaded = loadCity();
-  expect(loaded?.version).toBe(7);
+  expect(loaded?.version).toBe(8);
   expect(loaded?.profile.lifespanYears).toBe(75);
   expect(loaded?.profile.name).toBe('');
   expect(loaded?.milestones).toEqual([]);
@@ -67,7 +68,7 @@ it('migrates a v3 save (no milestones) up to current', () => {
   const { milestones: _m, ...old } = s;
   saveCity({ ...old, version: 3 } as unknown as typeof s);
   const loaded = loadCity();
-  expect(loaded?.version).toBe(7);
+  expect(loaded?.version).toBe(8);
   expect(loaded?.milestones).toEqual([]);
 });
 
@@ -76,15 +77,15 @@ it('migrates a v4 save (no profile.name) up to current with an empty name', () =
   const { name: _n, ...profileNoName } = s.profile;
   saveCity({ ...s, profile: profileNoName, version: 4 } as unknown as typeof s);
   const loaded = loadCity();
-  expect(loaded?.version).toBe(7);
+  expect(loaded?.version).toBe(8);
   expect(loaded?.profile.name).toBe('');
   expect(loaded?.profile.birthDateISO).toBe(s.profile.birthDateISO);
 });
 
-it('migrates v6 → v7: back-fills a General borough and re-homes district-direct items', () => {
+it('migrates v6 → v7 → v8: back-fills a General borough and re-homes district-direct items', () => {
   saveCity(v6Save());
   const loaded = loadCity()!;
-  expect(loaded.version).toBe(7);
+  expect(loaded.version).toBe(8);
   const gen = loaded.boroughs.find((b) => b.districtId === 'd1' && b.name === 'General')!;
   expect(gen).toBeTruthy();
   // habit, landmark, and neighborhood all re-parent onto the General borough
@@ -97,14 +98,14 @@ it('migrates v6 → v7: back-fills a General borough and re-homes district-direc
   expect(loaded.neighborhoods.find((n) => n.id === 'nb1')).toBeTruthy();
 });
 
-it('v6 → v7 re-homes district-direct items into the existing first borough', () => {
+it('v6 → v7 → v8: re-homes district-direct items into the existing first borough', () => {
   saveCity(
     v6Save({
       boroughs: [{ id: 'b-existing', districtId: 'd1', name: 'Sleep', healthDirect: 0.5 }],
     }),
   );
   const loaded = loadCity()!;
-  expect(loaded.version).toBe(7);
+  expect(loaded.version).toBe(8);
   // no new "General" — the existing borough is the re-home target
   expect(loaded.boroughs.filter((b) => b.districtId === 'd1')).toHaveLength(1);
   expect(loaded.habits[0].target).toEqual({ kind: 'borough', id: 'b-existing' });
@@ -170,4 +171,33 @@ it('recordCheckIn(dateISO) stamps both markers to that day', () => {
   recordCheckIn('2026-06-25');
   expect(getLastCheckIn()).toBe('2026-06-25');
   expect(localStorage.getItem('polis.lastResolved')).toBe('2026-06-25');
+});
+
+it('migrates v7 habits to v8: default daily cadence + backfilled lastCompletedISO', () => {
+  const v7 = {
+    version: 7,
+    day: 3,
+    districts: [], boroughs: [], landmarks: [], neighborhoods: [], milestones: [],
+    profile: { name: 'X', birthDateISO: '1988-11-26', lifespanYears: 75, startDateISO: '2026-06-01' },
+    settings: { goodHabitGain: 0.99 }, // partial old-style object: existing key with non-default value
+    habits: [
+      { id: 'h1', name: 'a', kind: 'good', weight: 1, target: { kind: 'borough', id: 'b' }, createdAtISO: '2026-06-01' },
+      { id: 'h2', name: 'b', kind: 'good', weight: 1, target: { kind: 'borough', id: 'b' }, createdAtISO: '2026-06-01' },
+    ],
+    log: [
+      { day: 1, dateISO: '2026-06-02', checkedIn: true, completedHabitIds: ['h1'], loggedBadHabitIds: [], netHealthChange: 0, snapshot: { neighborhoods: [], landmarks: [] } },
+      { day: 2, dateISO: '2026-06-03', checkedIn: true, completedHabitIds: ['h1'], loggedBadHabitIds: [], netHealthChange: 0, snapshot: { neighborhoods: [], landmarks: [] } },
+    ],
+  };
+  localStorage.setItem('polis.city', JSON.stringify(v7));
+  const c = loadCity();
+  expect(c).toBeTruthy();
+  const h1 = c!.habits.find((h) => h.id === 'h1')!;
+  const h2 = c!.habits.find((h) => h.id === 'h2')!;
+  expect(h1.cadence).toBe('daily');
+  expect(h1.lastCompletedISO).toBe('2026-06-03'); // latest log completing h1
+  expect(h2.lastCompletedISO).toBe('2026-06-01'); // never completed → createdAtISO
+  // settings backfill: new tunable from DEFAULT_SETTINGS, existing value preserved
+  expect(c!.settings.upkeepDailyGain).toBe(DEFAULT_SETTINGS.upkeepDailyGain);
+  expect(c!.settings.goodHabitGain).toBe(0.99); // existing value preserved
 });
