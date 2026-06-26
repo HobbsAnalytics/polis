@@ -84,7 +84,7 @@ export function CheckIn({ habits, canCheckIn, canLogYesterday, todayISO, onCompl
                           checked={done.has(habit.id)}
                           onChange={() => toggle(done, setDone, habit.id)}
                         />
-                        {habit.name}<span className="muted">✓ maintained · due in {status.dueInDays}d</span>
+                        {habit.name}<span className="muted"> ✓ maintained · due in {status.dueInDays}d</span>
                       </label>
                     ))}
                   </>
