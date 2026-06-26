@@ -18,6 +18,7 @@ import {
   updateNeighborhood,
 } from './neighborhoods.ts';
 import { dayDiffISO } from './dates.ts';
+import { habitStatus, cadenceEmphasis } from './cadence.ts';
 
 export function clamp01(n: number): number {
   if (n < 0) return 0;
@@ -54,23 +55,38 @@ export function createCity(opts: CreateCityOpts = {}): CityState {
 
 /**
  * The habit-driven change for one node on a given day, excluding entropy.
- * Effects scale by habit weight. Shared by `updateScalar` (district/borough/
- * landmark scalars) and the neighborhood update (which adds varied entropy).
+ * Effects scale by habit weight and cadence emphasis. Shared by `updateScalar`
+ * (district/borough/landmark scalars) and the neighborhood update (which adds
+ * varied entropy). `checkedIn` is no longer used by habit math — the
+ * maintained/overdue branches supersede the old missed-checkin distinction.
  */
 export function habitDelta(
   habits: Habit[],
   completed: Set<string>,
   logged: Set<string>,
-  checkedIn: boolean,
   s: Settings,
+  todayISO: string,
 ): number {
   let delta = 0;
   for (const h of habits) {
     if (h.kind === 'good') {
+      const e = cadenceEmphasis(h.cadence);
       if (completed.has(h.id)) {
-        delta += s.goodHabitGain * h.weight;
+        delta += s.goodHabitGain * h.weight * e;
       } else {
-        delta -= (checkedIn ? s.missedHabitPenalty : s.missedCheckinPenalty) * h.weight;
+        const st = habitStatus({
+          cadence: h.cadence,
+          anchorISO: h.lastCompletedISO ?? h.createdAtISO,
+          todayISO,
+        });
+        if (st.state === 'maintained') {
+          delta += s.upkeepDailyGain * h.weight * e;
+        } else if (st.state === 'dueToday') {
+          delta -= s.overdueErosionBase * h.weight * e;
+        } else {
+          const growth = 1 + Math.min(st.daysOverdue, s.overdueGrowthCapDays) * s.overdueGrowthPerDay;
+          delta -= s.overdueErosionBase * growth * h.weight * e;
+        }
       }
     } else if (logged.has(h.id)) {
       delta -= s.badHabitPenalty * h.weight;
@@ -88,10 +104,10 @@ export function updateScalar(
   habits: Habit[],
   completed: Set<string>,
   logged: Set<string>,
-  checkedIn: boolean,
   s: Settings,
+  todayISO: string,
 ): number {
-  return clamp01(current + habitDelta(habits, completed, logged, checkedIn, s) - s.entropyPerDay);
+  return clamp01(current + habitDelta(habits, completed, logged, s, todayISO) - s.entropyPerDay);
 }
 
 function advanceLandmarkTier(lm: Landmark, s: Settings): Landmark {
@@ -130,16 +146,17 @@ function advanceDay(state: CityState, input: DayInput): CityState {
   const s = state.settings;
   const completed = new Set(input.completedHabitIds);
   const logged = new Set(input.loggedBadHabitIds);
+  const today = input.dateISO ?? '';
 
   const upd = (current: number, kind: 'district' | 'borough' | 'landmark', id: string) =>
-    updateScalar(current, habitsTargeting(state.habits, kind, id), completed, logged, input.checkedIn, s);
+    updateScalar(current, habitsTargeting(state.habits, kind, id), completed, logged, s, today);
   // habit-driven delta (no entropy) for a container, memoized — neighborhoods reuse it.
   const deltaCache = new Map<string, number>();
   const containerDelta = (kind: 'district' | 'borough', id: string) => {
     const key = `${kind}:${id}`;
     let d = deltaCache.get(key);
     if (d === undefined) {
-      d = habitDelta(habitsTargeting(state.habits, kind, id), completed, logged, input.checkedIn, s);
+      d = habitDelta(habitsTargeting(state.habits, kind, id), completed, logged, s, today);
       deltaCache.set(key, d);
     }
     return d;
