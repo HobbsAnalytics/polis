@@ -11,7 +11,11 @@ export const DEFAULT_PROFILE: Profile = {
 
 /**
  * Defaults tuned so one missed day is noise and ~3 neglected weeks clearly shows.
- * Neglect gradient: missedCheckinPenalty < missedHabitPenalty < badHabitPenalty.
+ * Habit health uses the cadence upkeep model (Task 4): completing deposits goodHabitGain,
+ * maintained habits gain upkeepDailyGain, and overdue habits erode at overdueErosionBase
+ * growing by overdueGrowthPerDay up to overdueGrowthCapDays. The legacy
+ * missedHabitPenalty/missedCheckinPenalty are retained for save compatibility but are no
+ * longer read by the habit math.
  */
 export const DEFAULT_SETTINGS: Settings = {
   entropyPerDay: 0.01,
