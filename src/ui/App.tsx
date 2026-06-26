@@ -64,6 +64,24 @@ export function App() {
     if (!hasSeenSplash('map')) setActiveSplash('map');
   }, []);
 
+  useEffect(() => {
+    const resync = () => {
+      const t = todayISO();
+      // Re-resolve if a new calendar day arrived since we last rendered.
+      setCity(loadResolvedCity(t));
+      setLastCheckIn(getLastCheckIn());
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') resync();
+    };
+    window.addEventListener('focus', resync);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', resync);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+
   // Navigate to a page, auto-opening its splash the first time it's visited ever.
   // Driven by the nav action (not an effect) so re-renders never reopen it.
   function goToPage(next: Page) {
