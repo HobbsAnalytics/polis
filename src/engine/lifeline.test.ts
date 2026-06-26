@@ -138,14 +138,18 @@ it('lifeCellIndex = row*52 + cell', () => {
   expect(lifeCellIndex('1988-11-26', '1990-11-26')).toBe(104);
 });
 
-it('weeklyHealthChange buckets days into birthday-anchored cells', () => {
+it('weeklyHealthChange buckets days into birthday-anchored cells (not raw week count)', () => {
   const b = '1988-11-26';
   const m = weeklyHealthChange(
-    [log('1988-11-26', 0.2), log('1988-11-27', -0.05), log('1990-11-26', -0.3), log('', 99)],
+    [log('1988-11-26', 0.2), log('1988-11-27', -0.05), log('1990-11-26', -0.3), log('1989-11-25', 0.4), log('', 99)],
     b,
   );
-  expect(Math.abs((m.get(0) ?? 0) - 0.15) < 1e-9).toBe(true);  // both first-row, cell 0
-  expect(Math.abs((m.get(104) ?? 0) - (-0.3)) < 1e-9).toBe(true); // row 2 cell 0
+  expect(Math.abs((m.get(0) ?? 0) - 0.15) < 1e-9).toBe(true);   // both first-row, cell 0
+  expect(Math.abs((m.get(104) ?? 0) - -0.3) < 1e-9).toBe(true); // row 2 cell 0
+  // 1989-11-25 is 364 days after birth: raw weekIndex buckets at 52, but
+  // birthday-anchored it caps in row 0 at cell 51. Discriminates the strategies.
+  expect(Math.abs((m.get(51) ?? 0) - 0.4) < 1e-9).toBe(true);
+  expect(m.get(52)).toBe(undefined);
   expect(m.get(undefined as unknown as number)).toBe(undefined);
 });
 

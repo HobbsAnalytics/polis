@@ -142,11 +142,10 @@ export function buildLifeline(profile: Profile, todayISO: string, eras: EraDef[]
     years.push({ yearIndex: y, eraId: era.id, eraStart, weeks });
   }
 
-  const weeksLivedVal = todayCell ? curRow * WEEKS_PER_YEAR + curCell : 0;
   return {
     totalWeeks,
-    weeksLived: weeksLivedVal,
-    weeksLeft: Math.max(0, totalWeeks - weeksLivedVal),
+    weeksLived: livedIndex,
+    weeksLeft: Math.max(0, totalWeeks - livedIndex),
     age,
     currentEraId: currentEra(age, eras).id,
     years,
