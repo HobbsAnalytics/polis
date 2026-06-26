@@ -190,10 +190,18 @@ export function getLastCheckIn(): string | null {
   return localStorage.getItem(LAST_CHECKIN_KEY);
 }
 
-/** Mark today as both checked-in and resolved. */
-export function recordCheckIn(todayISO: string): void {
-  localStorage.setItem(LAST_RESOLVED_KEY, todayISO);
-  localStorage.setItem(LAST_CHECKIN_KEY, todayISO);
+/** Mark the given day as both checked-in and resolved. */
+export function recordCheckIn(dateISO: string): void {
+  localStorage.setItem(LAST_RESOLVED_KEY, dateISO);
+  localStorage.setItem(LAST_CHECKIN_KEY, dateISO);
+}
+
+/** True iff yesterday (today−1) is unresolved and today is not yet logged. */
+export function canLogYesterday(todayISO: string): boolean {
+  const lastResolved = localStorage.getItem(LAST_RESOLVED_KEY);
+  const lastCheckIn = localStorage.getItem(LAST_CHECKIN_KEY);
+  const yesterdayOpen = lastResolved == null || dayDiffISO(lastResolved, todayISO) >= 2;
+  return yesterdayOpen && lastCheckIn !== todayISO;
 }
 
 /** Reset resolution bookkeeping for a fresh seed (no check-in yet, resolved today). */

@@ -1,5 +1,5 @@
 import { it, expect, beforeEach } from '../testkit.ts';
-import { saveCity, loadCity, exportCity, importCity, catchUpMissedDays, anchorStartDate } from './storage.ts';
+import { saveCity, loadCity, exportCity, importCity, catchUpMissedDays, anchorStartDate, canLogYesterday, recordCheckIn, getLastCheckIn } from './storage.ts';
 import { createSeededCity } from '../engine/seed.ts';
 import { createCity } from '../engine/engine.ts';
 import type { CityState, District } from '../engine/types.ts';
@@ -148,4 +148,26 @@ it('anchorStartDate falls back to the resolved marker, then today', () => {
   const s = { ...createSeededCity(), profile: prof('') };
   expect(anchorStartDate(s, '2026-06-26', '2026-06-20').profile.startDateISO).toBe('2026-06-20');
   expect(anchorStartDate({ ...s }, '2026-06-26', null).profile.startDateISO).toBe('2026-06-26');
+});
+
+it('canLogYesterday: open when marker is ≤ today-2 and today not logged', () => {
+  localStorage.setItem('polis.lastResolved', '2026-06-24'); // today-2
+  expect(canLogYesterday('2026-06-26')).toBe(true);
+});
+
+it('canLogYesterday: closed once yesterday is resolved', () => {
+  localStorage.setItem('polis.lastResolved', '2026-06-25'); // yesterday resolved
+  expect(canLogYesterday('2026-06-26')).toBe(false);
+});
+
+it('canLogYesterday: closed once today is logged', () => {
+  localStorage.setItem('polis.lastResolved', '2026-06-24');
+  localStorage.setItem('polis.lastCheckIn', '2026-06-26');
+  expect(canLogYesterday('2026-06-26')).toBe(false);
+});
+
+it('recordCheckIn(dateISO) stamps both markers to that day', () => {
+  recordCheckIn('2026-06-25');
+  expect(getLastCheckIn()).toBe('2026-06-25');
+  expect(localStorage.getItem('polis.lastResolved')).toBe('2026-06-25');
 });
