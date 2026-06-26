@@ -152,6 +152,13 @@ export function catchUpMissedDays(state: CityState, elapsedDays: number, firstDa
   return s;
 }
 
+export function anchorStartDate(state: CityState, todayISO: string, lastResolved: string | null): CityState {
+  if (state.profile.startDateISO) return state;
+  const dated = state.log.map((d) => d.dateISO).filter(Boolean).sort();
+  const start = dated[0] ?? lastResolved ?? todayISO;
+  return { ...state, profile: { ...state.profile, startDateISO: start } };
+}
+
 /**
  * Load the saved city (or seed a fresh one) and resolve any whole days missed
  * since the last resolution — entropy/missed-check-in for each, minus today
@@ -161,13 +168,17 @@ export function catchUpMissedDays(state: CityState, elapsedDays: number, firstDa
 export function loadResolvedCity(todayISO: string): CityState {
   let s = loadCity() ?? createSeededCity();
   const lastResolved = localStorage.getItem(LAST_RESOLVED_KEY);
+
+  const anchored = anchorStartDate(s, todayISO, lastResolved);
+  if (anchored !== s) { s = anchored; saveCity(s); }
+
   if (lastResolved == null) {
     localStorage.setItem(LAST_RESOLVED_KEY, todayISO);
   } else {
-    const missed = Math.max(0, dayDiffISO(lastResolved, todayISO) - 1);
+    const missed = Math.max(0, dayDiffISO(lastResolved, todayISO) - 2); // grace: hold yesterday open
     if (missed > 0) {
       s = catchUpMissedDays(s, missed, addDaysISO(lastResolved, 1));
-      localStorage.setItem(LAST_RESOLVED_KEY, addDaysISO(todayISO, -1));
+      localStorage.setItem(LAST_RESOLVED_KEY, addDaysISO(todayISO, -2));
       saveCity(s);
     }
   }
