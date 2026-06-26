@@ -191,8 +191,8 @@ export function App() {
             <span className="epigraph">the shape of how you&rsquo;ve been living</span>
           </div>
           <p className="subtitle">
-            {named ? `${city.profile.name}'s city` : 'Your city, your self'} ·{' '}
-            {named ? `day ${day}` : 'day 0 — name your city on the Profile tab to start the clock'}
+            {named ? `${city.profile.name}'s city` : 'Your city, your self'} · day {day}
+            {!named && ' · name your city on the Profile tab'}
           </p>
         </div>
         <div className="toolbar">
