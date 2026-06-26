@@ -137,3 +137,24 @@ it('lifeCell returns null before birth; lifeCellIndex returns -1', () => {
 it('lifeCellIndex = row*52 + cell', () => {
   expect(lifeCellIndex('1988-11-26', '1990-11-26')).toBe(104);
 });
+
+it('weeklyHealthChange buckets days into birthday-anchored cells', () => {
+  const b = '1988-11-26';
+  const m = weeklyHealthChange(
+    [log('1988-11-26', 0.2), log('1988-11-27', -0.05), log('1990-11-26', -0.3), log('', 99)],
+    b,
+  );
+  expect(Math.abs((m.get(0) ?? 0) - 0.15) < 1e-9).toBe(true);  // both first-row, cell 0
+  expect(Math.abs((m.get(104) ?? 0) - (-0.3)) < 1e-9).toBe(true); // row 2 cell 0
+  expect(m.get(undefined as unknown as number)).toBe(undefined);
+});
+
+it('buildLifeline marks the today cell as current and prior cells lived', () => {
+  const profile = { name: 'x', birthDateISO: '1988-11-26', lifespanYears: 75, startDateISO: '2020-01-01' };
+  const vm = buildLifeline(profile, '1990-12-03', LIFE_ERAS); // row 2, cell ~1
+  const row2 = vm.years[2];
+  expect(row2.weeks[0].status).toBe('lived');
+  expect(row2.weeks[1].status).toBe('current');
+  expect(row2.weeks[2].status).toBe('future');
+  expect(vm.age).toBe(2);
+});
