@@ -30,6 +30,7 @@ import {
   importCity,
   loadResolvedCity,
   openDraftWindow,
+  resetResolution,
 } from '../persistence/storage.ts';
 import {
   loadDrafts,
@@ -216,6 +217,10 @@ export function App() {
   async function handleImport(file: File) {
     try {
       commitMutation(importCity(await file.text()));
+      // The imported file is a fresh committed base: clear any stale drafts and
+      // reset day-resolution so old draft days don't replay/commit onto it.
+      resetResolution(todayISO());
+      setDrafts({});
     } catch {
       alert('That file is not a valid Polis city.');
     }
