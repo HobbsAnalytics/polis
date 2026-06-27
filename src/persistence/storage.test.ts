@@ -1,8 +1,10 @@
 import { it, expect, beforeEach } from '../testkit.ts';
-import { saveCity, loadCity, exportCity, importCity, catchUpMissedDays, anchorStartDate, canLogYesterday, recordCheckIn, getLastCheckIn } from './storage.ts';
+import { saveCity, loadCity, exportCity, importCity, catchUpMissedDays, anchorStartDate, recordCheckIn, getLastCheckIn, loadResolvedCity, openDraftWindow } from './storage.ts';
 import { createSeededCity } from '../engine/seed.ts';
 import { createCity } from '../engine/engine.ts';
 import { DEFAULT_SETTINGS } from '../engine/settings.ts';
+import { saveDrafts } from './drafts.ts';
+import { addDaysISO } from '../engine/dates.ts';
 import type { CityState, District } from '../engine/types.ts';
 
 const dist = (id: string, healthDirect = 0.5): District => ({
@@ -151,22 +153,6 @@ it('anchorStartDate falls back to the resolved marker, then today', () => {
   expect(anchorStartDate({ ...s }, '2026-06-26', null).profile.startDateISO).toBe('2026-06-26');
 });
 
-it('canLogYesterday: open when marker is ≤ today-2 and today not logged', () => {
-  localStorage.setItem('polis.lastResolved', '2026-06-24'); // today-2
-  expect(canLogYesterday('2026-06-26')).toBe(true);
-});
-
-it('canLogYesterday: closed once yesterday is resolved', () => {
-  localStorage.setItem('polis.lastResolved', '2026-06-25'); // yesterday resolved
-  expect(canLogYesterday('2026-06-26')).toBe(false);
-});
-
-it('canLogYesterday: closed once today is logged', () => {
-  localStorage.setItem('polis.lastResolved', '2026-06-24');
-  localStorage.setItem('polis.lastCheckIn', '2026-06-26');
-  expect(canLogYesterday('2026-06-26')).toBe(false);
-});
-
 it('recordCheckIn(dateISO) stamps both markers to that day', () => {
   recordCheckIn('2026-06-25');
   expect(getLastCheckIn()).toBe('2026-06-25');
@@ -200,4 +186,27 @@ it('migrates v7 habits to v8: default daily cadence + backfilled lastCompletedIS
   // settings backfill: new tunable from DEFAULT_SETTINGS, existing value preserved
   expect(c!.settings.upkeepDailyGain).toBe(DEFAULT_SETTINGS.upkeepDailyGain);
   expect(c!.settings.goodHabitGain).toBe(0.99); // existing value preserved
+});
+
+it('loadResolvedCity on a fresh store sets lastResolved to yesterday and leaves today editable', () => {
+  localStorage.clear();
+  const today = '2026-06-27';
+  const base = loadResolvedCity(today);
+  expect(localStorage.getItem('polis.lastResolved')).toBe(addDaysISO(today, -1));
+  // committed base is the seed (day 0) — today not folded in
+  expect(base.day).toBe(0);
+  // open window is just today
+  expect(openDraftWindow(today).map((d) => d.dateISO)).toEqual([today]);
+});
+
+it('loadResolvedCity commits days that have aged past the 2-day window', () => {
+  localStorage.clear();
+  // Pretend we last resolved 5 days before today; no drafts → those days commit as missed.
+  const today = '2026-06-27';
+  loadResolvedCity(addDaysISO(today, -5)); // seeds + sets lastResolved = today-6
+  const beforeDay = loadResolvedCity(today).day; // commits (today-6, today-2]
+  // committed boundary is today-2; window is yesterday+today
+  expect(localStorage.getItem('polis.lastResolved')).toBe(addDaysISO(today, -2));
+  expect(openDraftWindow(today).map((d) => d.dateISO)).toEqual([addDaysISO(today, -1), today]);
+  expect(beforeDay).toBeGreaterThan(0); // missed days advanced the committed base
 });

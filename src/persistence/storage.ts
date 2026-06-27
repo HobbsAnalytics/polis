@@ -1,9 +1,11 @@
 import type { Borough, CityState, DayLog, District, Habit, Landmark, Neighborhood } from '../engine/types.ts';
-import { applyMissedDay } from '../engine/engine.ts';
+import { applyMissedDay, applyCheckIn } from '../engine/engine.ts';
 import { seedNeighborhoods } from '../engine/neighborhoods.ts';
 import { createSeededCity } from '../engine/seed.ts';
 import { dayDiffISO, addDaysISO } from '../engine/dates.ts';
 import { CITY_VERSION, DEFAULT_PROFILE, DEFAULT_SETTINGS } from '../engine/settings.ts';
+import { loadDrafts, saveDrafts, openWindow } from './drafts.ts';
+import type { DraftInput } from '../engine/replay.ts';
 
 const STORAGE_KEY = 'polis.city';
 // Day-resolution bookkeeping (owned here, kept separate from the city blob).
@@ -193,29 +195,53 @@ export function anchorStartDate(state: CityState, todayISO: string, lastResolved
 }
 
 /**
- * Load the saved city (or seed a fresh one) and resolve any whole days missed
- * since the last resolution — entropy/missed-check-in for each, minus today
- * (today is still open to check in). Persists both the advanced city and the
- * resolution marker. The one entry point the UI needs at startup.
+ * Load the committed base city (or seed one) and commit any whole day that has
+ * aged past the 2-day editable window — entropy/missed for a day with no draft,
+ * or the draft's logged habits for a day that has one. Today and yesterday stay
+ * editable drafts (replayed on top by the UI). Returns the committed base.
  */
 export function loadResolvedCity(todayISO: string): CityState {
-  let s = loadCity() ?? createSeededCity();
+  let base = loadCity() ?? createSeededCity();
   const lastResolved = localStorage.getItem(LAST_RESOLVED_KEY);
 
-  const anchored = anchorStartDate(s, todayISO, lastResolved);
-  if (anchored !== s) { s = anchored; saveCity(s); }
+  const anchored = anchorStartDate(base, todayISO, lastResolved);
+  if (anchored !== base) { base = anchored; saveCity(base); }
 
   if (lastResolved == null) {
-    localStorage.setItem(LAST_RESOLVED_KEY, todayISO);
-  } else {
-    const missed = Math.max(0, dayDiffISO(lastResolved, todayISO) - 2); // grace: hold yesterday open
-    if (missed > 0) {
-      s = catchUpMissedDays(s, missed, addDaysISO(lastResolved, 1));
-      localStorage.setItem(LAST_RESOLVED_KEY, addDaysISO(todayISO, -2));
-      saveCity(s);
-    }
+    // New/migrated save: treat the base as committed through yesterday so today is editable.
+    localStorage.setItem(LAST_RESOLVED_KEY, addDaysISO(todayISO, -1));
+    return base;
   }
-  return s;
+
+  const commitThrough = addDaysISO(todayISO, -2);
+  if (dayDiffISO(lastResolved, commitThrough) > 0) {
+    const store = loadDrafts();
+    let nextStore = store;
+    let s = base;
+    let d = addDaysISO(lastResolved, 1);
+    while (dayDiffISO(d, commitThrough) >= 0) {
+      const draft = store[d];
+      s = draft
+        ? applyCheckIn(s, { completedHabitIds: draft.completedHabitIds, loggedBadHabitIds: draft.loggedBadHabitIds, dateISO: d })
+        : applyMissedDay(s, d);
+      if (nextStore[d]) {
+        const { [d]: _removed, ...rest } = nextStore;
+        nextStore = rest;
+      }
+      d = addDaysISO(d, 1);
+    }
+    base = s;
+    saveCity(base);
+    saveDrafts(nextStore);
+    localStorage.setItem(LAST_RESOLVED_KEY, commitThrough);
+  }
+  return base;
+}
+
+/** The ordered editable open window (yesterday + today, or just today right after a fresh load). */
+export function openDraftWindow(todayISO: string): DraftInput[] {
+  const lastResolved = localStorage.getItem(LAST_RESOLVED_KEY) ?? addDaysISO(todayISO, -1);
+  return openWindow(loadDrafts(), todayISO, lastResolved);
 }
 
 /** The day of the user's last check-in (YYYY-MM-DD), or null if never. */
@@ -229,18 +255,11 @@ export function recordCheckIn(dateISO: string): void {
   localStorage.setItem(LAST_CHECKIN_KEY, dateISO);
 }
 
-/** True iff yesterday (today−1) is unresolved and today is not yet logged. */
-export function canLogYesterday(todayISO: string): boolean {
-  const lastResolved = localStorage.getItem(LAST_RESOLVED_KEY);
-  const lastCheckIn = localStorage.getItem(LAST_CHECKIN_KEY);
-  const yesterdayOpen = lastResolved == null || dayDiffISO(lastResolved, todayISO) >= 2;
-  return yesterdayOpen && lastCheckIn !== todayISO;
-}
-
-/** Reset resolution bookkeeping for a fresh seed (no check-in yet, resolved today). */
+/** Reset day-resolution bookkeeping for a fresh seed: no drafts, today editable. */
 export function resetResolution(todayISO: string): void {
   localStorage.removeItem(LAST_CHECKIN_KEY);
-  localStorage.setItem(LAST_RESOLVED_KEY, todayISO);
+  saveDrafts({});
+  localStorage.setItem(LAST_RESOLVED_KEY, addDaysISO(todayISO, -1));
 }
 
 function parseCity(json: string): CityState {
