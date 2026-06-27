@@ -15,7 +15,6 @@ interface Props {
   habits: Habit[];
   /** When provided, the rail shows a "Log today" CTA that calls this. */
   onLogToday?: () => void;
-  canCheckIn?: boolean;
 }
 
 function hexPoints(s: number): string {
@@ -55,7 +54,7 @@ function centroid(tiles: PlacedTile[]): { x: number; y: number } {
   };
 }
 
-export function CityMap({ vm, habits, onLogToday, canCheckIn }: Props) {
+export function CityMap({ vm, habits, onLogToday }: Props) {
   const { handlers, tooltip } = useTooltip('[data-info]', 260);
   const [hover, setHover] = useState<string | null>(null); // hovered districtId (transient preview)
   const [selection, setSelection] = useState<Selection>(null); // persistent click selection
@@ -221,12 +220,8 @@ export function CityMap({ vm, habits, onLogToday, canCheckIn }: Props) {
         {vm.districts.length === 0 && <p className="abandoned">no districts yet</p>}
 
         {onLogToday && (
-          <button type="button" className="cta" disabled={canCheckIn === false} onClick={onLogToday}>
-            {canCheckIn === false ? 'Logged today ✓' : (
-              <>
-                Log today <span className="arr">→</span>
-              </>
-            )}
+          <button type="button" className="cta" onClick={onLogToday}>
+            Log / edit today
           </button>
         )}
       </aside>
