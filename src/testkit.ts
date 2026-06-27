@@ -50,14 +50,27 @@ export const beforeEach = nodeBeforeEach;
 
 class Expectation {
   private actual: unknown;
-  constructor(actual: unknown) {
+  private negated: boolean;
+  constructor(actual: unknown, negated: boolean = false) {
     this.actual = actual;
+    this.negated = negated;
+  }
+  get not(): Expectation {
+    return new Expectation(this.actual, !this.negated);
   }
   toBe(e: unknown) {
-    assert.strictEqual(this.actual, e);
+    if (this.negated) {
+      assert.notStrictEqual(this.actual, e);
+    } else {
+      assert.strictEqual(this.actual, e);
+    }
   }
   toEqual(e: unknown) {
-    assert.deepStrictEqual(this.actual, e);
+    if (this.negated) {
+      assert.notDeepStrictEqual(this.actual, e);
+    } else {
+      assert.deepStrictEqual(this.actual, e);
+    }
   }
   toBeGreaterThan(e: number) {
     assert.ok((this.actual as number) > e, `expected ${this.actual} > ${e}`);
