@@ -77,21 +77,40 @@ Today the engine appends one resolved day per `advanceDay`. Instant, editable da
 re-deriving the recent days on each edit, so the model becomes **a committed base plus a
 replay of draft days**:
 
-- **Committed base** = the `snapshot` (already stored on every `DayLog`) of the last
-  *locked* day — the most recent day that has aged out of the editable window.
-- **Draft days** = today, and still-open yesterday. Each draft day's
-  `completedHabitIds` / `loggedBadHabitIds` are editable sets.
-- On any tick/untick: edit the relevant draft day's set, then **re-derive** the city by
-  replaying the draft days in chronological order on top of the committed snapshot, using the
-  existing `advanceDay`. Because replay starts from a clean snapshot, health clamping (0–1)
-  reverses exactly — undo introduces no drift.
-- On load, `loadResolvedCity` **commits** any draft day that has aged out of the window
-  (folds it permanently into the base), generalizing today's `catchUpMissedDays` logic.
-  Replay is idempotent; days never double-count.
+- **Committed base** = a **full `CityState`** through day `today−2` (the last *locked* day).
+  This is the authoritative persisted city (`polis.city`). NOTE: the per-`DayLog`
+  `DaySnapshot` is *partial* (neighborhood health + landmark condition only — no maturity,
+  tiers, features, building list, or day counter), so it is **not** a valid replay base; it
+  remains only for the read-only History view. Replay anchors on the full committed
+  `CityState`.
+- **Draft days** = today, and still-open yesterday — the 2-day open window. Each draft day's
+  `completedHabitIds` / `loggedBadHabitIds` are editable sets, persisted in a new
+  `polis.drafts` store: `Record<dateISO, { completedHabitIds: string[]; loggedBadHabitIds:
+  string[] }>`.
+- **Displayed city** = `replayDrafts(committedBase, openWindowDraftsInChronologicalOrder)`,
+  where replay folds each draft day via the existing `applyCheckIn` / `advanceDay`. The
+  engine is **fully deterministic — no RNG anywhere** (`entropyVariance(id)` is a stable
+  per-building hash; verified no `Math.random` in `src/engine/`). So replaying from the full
+  committed base reproduces health, sticky maturity/tiers/features, building growth, and the
+  day counter **exactly**, and undo (remove from a draft set, then re-replay from the
+  committed base) introduces **zero drift even at the 0–1 clamp boundaries**. Replay always
+  starts from the committed base and is never applied on top of an already-replayed state.
+- **Checkbox checked-state** for the selected day = the habit is in that day's draft set
+  **OR** (good habit and `lastCompletedISO === selectedDay` in the committed base). Ticking
+  adds the habit to the draft set and is **idempotent** — a no-op if the habit is already
+  effectively logged for that day. This enforces once-per-day and, at the deploy seam (§6),
+  prevents any double-count. Unticking removes it from the draft set and re-replays.
+- On load, `loadResolvedCity` **commits** every calendar day that has aged past the window
+  (after `lastResolved` and ≤ `today−2`): a day that has a draft commits with its inputs; a
+  day with none commits as a missed day (today's `catchUpMissedDays` behavior). Committed
+  drafts are removed and `lastResolved` advances to `today−2`. Today and yesterday remain
+  editable drafts. The midnight rollover is the Spec A resolve-on-load / focus re-resolve
+  running this same commit, shifting the toggle's two days forward.
 
 The per-node math is unchanged — Spec B's `habitDelta` upkeep/maintained/overdue branches and
-`cadenceEmphasis` are reused verbatim. What changes is *when and how often* a day is computed
-(append-once → replay-on-edit), not the formula.
+`cadenceEmphasis` are reused verbatim, as are `applyCheckIn` / `advanceDay`. What changes is
+*when and how often* a day is computed (append-once → replay-on-edit) and what is persisted (a
+committed base + a drafts store), not the formula.
 
 ### 5. Removed / changed surface
 
@@ -99,19 +118,30 @@ The per-node math is unchanged — Spec B's `habitDelta` upkeep/maintained/overd
   `CheckIn.tsx`.
 - ❌ `canLogYesterday` (storage) and the "Log these for yesterday instead" button + helper
   text in `CheckIn.tsx`; the `onCompleteYesterday` path in `App.tsx`.
+- 🔧 `recordCheckIn` and the `handleCheckIn` / `handleCheckInYesterday` bulk handlers are
+  replaced by draft-edit handlers (write `polis.drafts`, re-replay). `applyCheckIn` /
+  `advanceDay` are **retained** — replay reuses them.
 - 🔧 `CityMap` "Logged today ✓" CTA: "logged today" is no longer a single binary. The CTA
   becomes a neutral "Log / edit today" entry into the panel. (The panel keeps its current
   entry point; not inlined.)
 
 ### 6. Migration & compatibility
 
-- **No `CITY_VERSION` bump.** `DayLog` already carries `completedHabitIds`,
-  `loggedBadHabitIds`, and `snapshot`, which is everything replay needs.
-- Existing saves (the migrated v8 city) replay correctly: the last logged day's snapshot is
-  the committed base; the open window holds today (and yesterday if a day has passed).
-- A freshly reset / brand-new city has an empty base with today as the only draft day, so the
-  item-1 "born today" case simply shows **Today** with everything un-ticked and offers
-  **Yesterday** once a calendar day has elapsed.
+- **No `CITY_VERSION` bump** — the `CityState` shape is unchanged. The change is in the
+  persistence *envelope* (a new `polis.drafts` localStorage key) and the *meaning* of
+  `polis.city` (now the committed base rather than the displayed city).
+- **First load under the new code:** the saved `polis.city` becomes the committed base as-is;
+  `polis.drafts` is absent → treated as empty; `lastResolved` is set to **`today−1`** so
+  **today is immediately editable** (yesterday is treated as already committed in the base).
+  Joseph's freshly-reset city (empty history) therefore opens on **Today** with everything
+  un-ticked and full editing, and offers **Yesterday** once a calendar day has elapsed — item
+  1 fixed by construction.
+- **Deploy-day seam (documented, benign):** for a user who had already checked in *today*
+  under the old model, today's effect is already in the base; its checkbox shows checked (via
+  the `lastCompletedISO === today` rule) and the once-per-day idempotence guard makes
+  re-ticking a no-op — so there is **no double-count**. The only limitation is that such a
+  pre-deploy "today" log cannot be unticked on that one day (it is already committed). This
+  affects at most the single deploy day; no data is corrupted.
 - The day counter shown in the header continues to derive from `startDateISO` (Spec A),
   independent of replay bookkeeping.
 
@@ -131,10 +161,17 @@ TDD throughout:
 - Once-per-day idempotence: re-ticking the same habit/day is a no-op beyond the first.
 - Toggle edits the correct day (today vs yesterday) and switching districts preserves the day.
 - Yesterday commits at the midnight rollover and is no longer editable afterward.
-- **Regression guard:** replaying a sequence of draft days equals the old append-once path for
-  the same inputs (same final health/snapshots).
-- District tabs filter to the correct habits; urgency badges count overdue + due-today
-  accurately; attention-first default selects the right tab.
+- **Replay determinism:** replaying the same drafts on the same committed base twice yields an
+  identical city (health, maturity, tiers, building list, day) — and equals the old
+  append-once path for the same inputs (regression guard).
+- **Commit boundary on load:** days that have aged past the 2-day window commit (draft days
+  with their inputs, dayless gaps as missed days), `lastResolved` advances to `today−2`, and
+  today + yesterday remain editable drafts.
+- **Checked-state union rule:** a good habit reads as checked for a day when it is in that
+  day's draft set OR its committed `lastCompletedISO === selectedDay`.
+- District tabs filter to the correct habits (mapping each habit through its target
+  borough/landmark to a `districtId`); urgency badges count overdue + due-today accurately;
+  attention-first default selects the right tab.
 
 Full suite green + clean build + headless smoke, then a localhost review before any deploy.
 
