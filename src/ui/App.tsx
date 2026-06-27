@@ -11,8 +11,6 @@ import {
   renameDistrict,
   addBorough,
   renameBorough,
-  applyCheckIn,
-  applyMissedDay,
   cityDay,
   requestHabitRemoval,
   cancelHabitRemoval,
@@ -23,17 +21,24 @@ import {
 } from '../engine/engine.ts';
 import { buildCityViewModel } from '../engine/viewModel.ts';
 import { buildLifeline } from '../engine/lifeline.ts';
-import { todayISO, addDaysISO } from '../engine/dates.ts';
+import { todayISO } from '../engine/dates.ts';
+import { replayDrafts } from '../engine/replay.ts';
 import { LIFE_ERAS } from '../data/eras.ts';
 import {
   saveCity,
   exportCity,
   importCity,
   loadResolvedCity,
-  getLastCheckIn,
-  recordCheckIn,
-  canLogYesterday,
+  openDraftWindow,
 } from '../persistence/storage.ts';
+import {
+  loadDrafts,
+  saveDrafts,
+  setHabitLogged,
+  isHabitLoggedForDay,
+} from '../persistence/drafts.ts';
+import type { DraftStore } from '../persistence/drafts.ts';
+import { districtsWithHabits, districtBadgeCount } from './habitDistrict.ts';
 import { hasSeenSplash, markSplashSeen } from '../persistence/splash.ts';
 import type { SplashPage } from '../persistence/splash.ts';
 import { CheckIn } from './CheckIn.tsx';
@@ -48,8 +53,11 @@ import { HistoryPage } from './HistoryPage.tsx';
 type Page = 'map' | 'life' | 'history' | 'profile';
 
 export function App() {
-  const [city, setCity] = useState<CityState | null>(null);
-  const [lastCheckIn, setLastCheckIn] = useState<string | null>(null);
+  const today = todayISO();
+  const [committed, setCommitted] = useState<CityState | null>(null);
+  const [drafts, setDrafts] = useState<DraftStore>({});
+  const [selectedDay, setSelectedDay] = useState<'today' | 'yesterday'>('today');
+  const [selectedDistrictId, setSelectedDistrictId] = useState<string | null>(null);
   const [page, setPage] = useState<Page>('map');
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [activeSplash, setActiveSplash] = useState<SplashPage | null>(null);
@@ -58,18 +66,18 @@ export function App() {
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
-    setCity(loadResolvedCity(todayISO()));
-    setLastCheckIn(getLastCheckIn());
+    setCommitted(loadResolvedCity(today));
+    setDrafts(loadDrafts());
     // The Map splash greets on first launch (Map is the default page).
     if (!hasSeenSplash('map')) setActiveSplash('map');
-  }, []);
+  }, [today]);
 
   useEffect(() => {
     const resync = () => {
       const t = todayISO();
       // Re-resolve if a new calendar day arrived since we last rendered.
-      setCity(loadResolvedCity(t));
-      setLastCheckIn(getLastCheckIn());
+      setCommitted(loadResolvedCity(t));
+      setDrafts(loadDrafts());
     };
     const onVisible = () => {
       if (document.visibilityState === 'visible') resync();
@@ -81,6 +89,34 @@ export function App() {
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
+
+  // Displayed city = committed base + replayed open-window drafts. Never saved.
+  const draftWindow = openDraftWindow(today); // ordered [yesterday?, today]
+  const city = committed ? replayDrafts(committed, draftWindow) : null;
+
+  const earliest = draftWindow[0]?.dateISO; // yesterday in steady state
+  const canEditYesterday = draftWindow.length > 1;
+  const selectedDateISO = selectedDay === 'yesterday' && canEditYesterday ? earliest! : today;
+
+  function handleToggleHabit(habitId: string, kind: 'good' | 'bad', on: boolean) {
+    const nextDrafts = setHabitLogged(loadDrafts(), selectedDateISO, habitId, kind, on);
+    saveDrafts(nextDrafts);
+    setDrafts(nextDrafts);
+  }
+
+  function isLogged(habitId: string): boolean {
+    if (!committed) return false;
+    const habit = committed.habits.find((h) => h.id === habitId);
+    return habit ? isHabitLoggedForDay(drafts, selectedDateISO, habit) : false;
+  }
+
+  // Default the district once the city is known: attention-first.
+  useEffect(() => {
+    if (!city || selectedDistrictId) return;
+    const withHabits = districtsWithHabits(city);
+    const attention = withHabits.find((d) => districtBadgeCount(city, d.id, today) > 0);
+    setSelectedDistrictId((attention ?? withHabits[0])?.id ?? null);
+  }, [city, selectedDistrictId, today]);
 
   // Navigate to a page, auto-opening its splash the first time it's visited ever.
   // Driven by the nav action (not an effect) so re-renders never reopen it.
@@ -94,36 +130,17 @@ export function App() {
     setActiveSplash(null);
   }
 
-  function update(next: CityState) {
-    setCity(next);
-    saveCity(next);
-  }
-
-  function handleCheckIn(completedHabitIds: string[], loggedBadHabitIds: string[]) {
-    if (!city) return;
-    const today = todayISO();
-    let next = city;
-    // Preserve chronological order: an unlogged-yet-open yesterday becomes missed.
-    if (canLogYesterday(today)) next = applyMissedDay(next, addDaysISO(today, -1));
-    next = applyCheckIn(next, { completedHabitIds, loggedBadHabitIds, dateISO: today });
-    recordCheckIn(today);
-    setLastCheckIn(today);
-    update(next);
-  }
-
-  function handleCheckInYesterday(completedHabitIds: string[], loggedBadHabitIds: string[]) {
-    if (!city) return;
-    const yesterday = addDaysISO(todayISO(), -1);
-    const next = applyCheckIn(city, { completedHabitIds, loggedBadHabitIds, dateISO: yesterday });
-    recordCheckIn(yesterday); // markers → yesterday; today stays open
-    setLastCheckIn(yesterday);
-    update(next);
+  // Structural mutations operate on the committed base and persist it as polis.city.
+  // The displayed city (committed + replayed drafts) is never saved.
+  function commitMutation(nextCommitted: CityState) {
+    setCommitted(nextCommitted);
+    saveCity(nextCommitted); // polis.city = committed base
   }
 
   function handleCreateHabit(fields: NewHabitFields) {
-    if (!city) return;
-    update(
-      addHabit(city, {
+    if (!committed) return;
+    commitMutation(
+      addHabit(committed, {
         id: crypto.randomUUID(),
         name: fields.name,
         kind: fields.kind,
@@ -136,53 +153,53 @@ export function App() {
   }
 
   function handleUpdateHabit(id: string, fields: { name?: string; weight?: number }) {
-    if (city) update(updateHabit(city, id, fields));
+    if (committed) commitMutation(updateHabit(committed, id, fields));
   }
 
   function handleCreateLandmark(districtId: string, boroughId: string, name: string) {
-    if (!city) return;
-    update(addLandmark(city, { districtId, boroughId, name }).state);
+    if (!committed) return;
+    commitMutation(addLandmark(committed, { districtId, boroughId, name }).state);
   }
 
   function handleRenameLandmark(id: string, name: string) {
-    if (city) update(renameLandmark(city, id, name));
+    if (committed) commitMutation(renameLandmark(committed, id, name));
   }
   function handleRemoveLandmark(id: string) {
-    if (city) update(removeLandmark(city, id));
+    if (committed) commitMutation(removeLandmark(committed, id));
   }
 
   function handleAddDistrict(name: string, description: string) {
-    if (city) update(addDistrict(city, { name, description }).state);
+    if (committed) commitMutation(addDistrict(committed, { name, description }).state);
   }
   function handleRenameDistrict(id: string, fields: { name?: string; description?: string }) {
-    if (city) update(renameDistrict(city, id, fields));
+    if (committed) commitMutation(renameDistrict(committed, id, fields));
   }
   function handleAddBorough(districtId: string, name: string) {
-    if (city) update(addBorough(city, { districtId, name }).state);
+    if (committed) commitMutation(addBorough(committed, { districtId, name }).state);
   }
   function handleRenameBorough(id: string, name: string) {
-    if (city) update(renameBorough(city, id, name));
+    if (committed) commitMutation(renameBorough(committed, id, name));
   }
 
   function handleSetProfile(profile: Profile) {
-    if (city) update(setProfile(city, profile, todayISO()));
+    if (committed) commitMutation(setProfile(committed, profile, todayISO()));
   }
 
   function handleAddMilestone(label: string, dateISO: string) {
-    if (city) update(addMilestone(city, { id: crypto.randomUUID(), label, dateISO }));
+    if (committed) commitMutation(addMilestone(committed, { id: crypto.randomUUID(), label, dateISO }));
   }
   function handleRemoveMilestone(id: string) {
-    if (city) update(removeMilestone(city, id));
+    if (committed) commitMutation(removeMilestone(committed, id));
   }
 
   function handleRequestRemoval(id: string) {
-    if (city) update(requestHabitRemoval(city, id, todayISO()));
+    if (committed) commitMutation(requestHabitRemoval(committed, id, todayISO()));
   }
   function handleCancelRemoval(id: string) {
-    if (city) update(cancelHabitRemoval(city, id));
+    if (committed) commitMutation(cancelHabitRemoval(committed, id));
   }
   function handleConfirmRemoval(id: string) {
-    if (city) update(confirmHabitRemoval(city, id, todayISO()));
+    if (committed) commitMutation(confirmHabitRemoval(committed, id, todayISO()));
   }
 
   function handleExport() {
@@ -198,7 +215,7 @@ export function App() {
 
   async function handleImport(file: File) {
     try {
-      update(importCity(await file.text()));
+      commitMutation(importCity(await file.text()));
     } catch {
       alert('That file is not a valid Polis city.');
     }
@@ -211,8 +228,6 @@ export function App() {
   const vm = buildCityViewModel(city);
   const lifeline = buildLifeline(city.profile, todayISO(), LIFE_ERAS);
   const era = LIFE_ERAS.find((e) => e.id === lifeline.currentEraId);
-  const canCheckIn = lastCheckIn !== todayISO();
-  const yesterdayOpen = canLogYesterday(todayISO());
   const named = city.profile.name.trim() !== '';
   const day = cityDay(city.profile, todayISO());
 
@@ -286,7 +301,6 @@ export function App() {
           <CityMap
             vm={vm}
             habits={city.habits}
-            canCheckIn={canCheckIn}
             onLogToday={() => setCheckInOpen(true)}
           />
         </>
@@ -320,18 +334,15 @@ export function App() {
       {checkInOpen && (
         <Modal title="Daily check-in" onClose={() => setCheckInOpen(false)}>
           <CheckIn
-            habits={city.habits}
-            canCheckIn={canCheckIn}
-            canLogYesterday={yesterdayOpen}
-            todayISO={todayISO()}
-            onComplete={(good, bad) => {
-              handleCheckIn(good, bad);
-              setCheckInOpen(false);
-            }}
-            onCompleteYesterday={(good, bad) => {
-              handleCheckInYesterday(good, bad);
-              setCheckInOpen(false);
-            }}
+            city={city}
+            selectedDay={selectedDay}
+            onSelectDay={setSelectedDay}
+            canEditYesterday={canEditYesterday}
+            selectedDistrictId={selectedDistrictId}
+            onSelectDistrict={setSelectedDistrictId}
+            isLogged={isLogged}
+            onToggle={handleToggleHabit}
+            todayISO={selectedDateISO}
           />
         </Modal>
       )}
