@@ -1,5 +1,6 @@
 import { it, expect } from '../testkit.ts';
-import { dayDraft, setHabitLogged, openWindow, type DraftStore } from './drafts.ts';
+import { dayDraft, setHabitLogged, openWindow, isHabitLoggedForDay, type DraftStore } from './drafts.ts';
+import type { Habit } from '../engine/types.ts';
 
 it('dayDraft returns an empty draft for an unknown day', () => {
   const d = dayDraft({}, '2026-06-27');
@@ -39,4 +40,22 @@ it('openWindow carries each day\'s stored ids', () => {
   const s = setHabitLogged({}, '2026-06-27', 'h1', 'good', true);
   const w = openWindow(s, '2026-06-27', '2026-06-25');
   expect(w[1].completedHabitIds).toEqual(['h1']);
+});
+
+const good = (over: Partial<Habit> = {}): Habit => ({
+  id: 'h1', name: 'Read', kind: 'good', weight: 1,
+  target: { kind: 'borough', id: 'b1' }, createdAtISO: '2026-01-01', cadence: 'daily', ...over,
+});
+
+it('isHabitLoggedForDay true when in the draft set', () => {
+  const s = setHabitLogged({}, '2026-06-27', 'h1', 'good', true);
+  expect(isHabitLoggedForDay(s, '2026-06-27', good())).toBe(true);
+});
+
+it('isHabitLoggedForDay true when committed lastCompletedISO matches the day (deploy seam)', () => {
+  expect(isHabitLoggedForDay({}, '2026-06-27', good({ lastCompletedISO: '2026-06-27' }))).toBe(true);
+});
+
+it('isHabitLoggedForDay false when neither draft nor committed match', () => {
+  expect(isHabitLoggedForDay({}, '2026-06-27', good({ lastCompletedISO: '2026-06-26' }))).toBe(false);
 });
